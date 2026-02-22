@@ -28,6 +28,16 @@
     "url": "https://github.com/annexare/drizzle-graphql-suite/issues"
   },
   "type": "module",
+  "files": [
+    "packages/schema/dist",
+    "packages/client/dist",
+    "packages/query/dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     "./schema": {
       "import": "./packages/schema/dist/index.js",
@@ -52,10 +62,15 @@
     "lint": "bunx @biomejs/biome check --write .",
     "lint:check": "bunx @biomejs/biome check .",
     "check": "bun run check-types && bun run lint:check && bun run test",
-    "ci": "bun run check-types && bun run lint:check && bun run test"
+    "ci": "bun run check-types && bun run lint:check && bun run test",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "prepare-publish": "bun run scripts/prepare-publish.ts",
+    "release": "bun run build && bun run prepare-publish && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.4",
+    "@changesets/cli": "2.29.8",
     "typescript": "5.9.3"
   }
 }

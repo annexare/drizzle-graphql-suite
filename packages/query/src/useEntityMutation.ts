@@ -1,10 +1,10 @@
-import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   AnyEntityDefs,
   EntityClient,
   EntityDef,
   InferResult,
-} from 'drizzle-graphql-suite/client'
+} from '@drizzle-graphql-suite/client'
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query'
 
 // ─── Insert ────────────────────────────────────────────────
 

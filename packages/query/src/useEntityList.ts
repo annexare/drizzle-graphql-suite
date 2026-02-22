@@ -1,10 +1,10 @@
-import { type UseQueryResult, useQuery } from '@tanstack/react-query'
 import type {
   AnyEntityDefs,
   EntityClient,
   EntityDef,
   InferResult,
-} from 'drizzle-graphql-suite/client'
+} from '@drizzle-graphql-suite/client'
+import { type UseQueryResult, useQuery } from '@tanstack/react-query'
 
 type EntityListParams<TEntity extends EntityDef, TSelect extends Record<string, unknown>> = {
   select: TSelect
