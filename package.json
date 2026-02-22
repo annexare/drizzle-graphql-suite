@@ -29,28 +29,33 @@
   },
   "type": "module",
   "files": [
-    "packages/schema/dist",
-    "packages/client/dist",
-    "packages/query/dist",
+    "schema.js",
+    "schema.d.ts",
+    "client.js",
+    "client.d.ts",
+    "query.js",
+    "query.d.ts",
     "LICENSE",
     "README.md"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "exports": {
     "./schema": {
-      "import": "./packages/schema/dist/index.js",
-      "types": "./packages/schema/dist/index.d.ts"
+      "types": "./schema.d.ts",
+      "import": "./schema.js"
     },
     "./client": {
-      "import": "./packages/client/dist/index.js",
-      "types": "./packages/client/dist/index.d.ts"
+      "types": "./client.d.ts",
+      "import": "./client.js"
     },
     "./query": {
-      "import": "./packages/query/dist/index.js",
-      "types": "./packages/query/dist/index.d.ts"
+      "types": "./query.d.ts",
+      "import": "./query.js"
     }
+  },
+  "dependencies": {
+    "@drizzle-graphql-suite/schema": ">=0.5.0",
+    "@drizzle-graphql-suite/client": ">=0.5.0",
+    "@drizzle-graphql-suite/query": ">=0.5.0"
   },
   "workspaces": [
     "packages/*"
@@ -63,14 +68,12 @@
     "lint:check": "bunx @biomejs/biome check .",
     "check": "bun run check-types && bun run lint:check && bun run test",
     "ci": "bun run check-types && bun run lint:check && bun run test",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version": "bun run scripts/version-bump.ts",
     "prepare-publish": "bun run scripts/prepare-publish.ts",
-    "release": "bun run build && bun run prepare-publish && changeset publish"
+    "release": "bun run build && bun run prepare-publish"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.4",
-    "@changesets/cli": "2.29.8",
     "typescript": "5.9.3"
   }
 }

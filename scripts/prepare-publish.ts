@@ -68,11 +68,26 @@ async function preparePackage(packageDir: string) {
   console.log(`Prepared ${srcPkg.name} for publishing`)
 }
 
+const WRAPPER_PACKAGES = ['schema', 'client', 'query'] as const
+
+async function prepareRootPackage() {
+  const writes = WRAPPER_PACKAGES.flatMap((name) => {
+    const content = `export * from '@drizzle-graphql-suite/${name}'\n`
+    return [
+      Bun.write(join(rootDir, `${name}.js`), content),
+      Bun.write(join(rootDir, `${name}.d.ts`), content),
+    ]
+  })
+
+  await Promise.all(writes)
+  console.log('Root wrapper files generated')
+}
+
 async function main() {
   const entries = await readdir(packagesDir, { withFileTypes: true })
   const packageDirs = entries.filter((e) => e.isDirectory()).map((e) => join(packagesDir, e.name))
 
-  await Promise.all(packageDirs.map(preparePackage))
+  await Promise.all([...packageDirs.map(preparePackage), prepareRootPackage()])
   console.log('All packages prepared for publishing')
 }
 

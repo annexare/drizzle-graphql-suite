@@ -1,6 +1,29 @@
 # @drizzle-graphql-suite/query
 
+> Part of [`drizzle-graphql-suite`](https://github.com/annexare/drizzle-graphql-suite).
+> See also: [`schema`](../schema/README.md) | [`client`](../client/README.md)
+
 TanStack React Query hooks for `drizzle-graphql-suite/client` — type-safe data fetching with caching, pagination, and mutations.
+
+## Installation
+
+```bash
+bun add @drizzle-graphql-suite/query
+```
+
+```bash
+npm install @drizzle-graphql-suite/query
+```
+
+Or install the full suite:
+
+```bash
+bun add drizzle-graphql-suite
+```
+
+```bash
+npm install drizzle-graphql-suite
+```
 
 ## Setup
 

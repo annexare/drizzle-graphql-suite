@@ -1,6 +1,29 @@
 # @drizzle-graphql-suite/client
 
+> Part of [`drizzle-graphql-suite`](https://github.com/annexare/drizzle-graphql-suite).
+> See also: [`schema`](../schema/README.md) | [`query`](../query/README.md)
+
 Type-safe GraphQL client auto-generated from Drizzle schemas, with full TypeScript inference for queries, mutations, filters, and relations.
+
+## Installation
+
+```bash
+bun add @drizzle-graphql-suite/client
+```
+
+```bash
+npm install @drizzle-graphql-suite/client
+```
+
+Or install the full suite:
+
+```bash
+bun add drizzle-graphql-suite
+```
+
+```bash
+npm install drizzle-graphql-suite
+```
 
 ## Quick Start
 

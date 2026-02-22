@@ -1,17 +1,41 @@
 # @drizzle-graphql-suite/schema
 
+> Part of [`drizzle-graphql-suite`](https://github.com/annexare/drizzle-graphql-suite).
+> See also: [`client`](../client/README.md) | [`query`](../query/README.md)
+
 Auto-generates a complete GraphQL schema with CRUD operations, relation-level filtering, and hooks from Drizzle PostgreSQL schemas.
+
+## Installation
+
+```bash
+bun add @drizzle-graphql-suite/schema
+```
+
+```bash
+npm install @drizzle-graphql-suite/schema
+```
+
+Or install the full suite:
+
+```bash
+bun add drizzle-graphql-suite
+```
+
+```bash
+npm install drizzle-graphql-suite
+```
 
 ## Motivation
 
 Inspired by [`drizzle-graphql`](https://github.com/drizzle-team/drizzle-graphql), this package is a purpose-built replacement focused on PostgreSQL. Key improvements:
 
+- **Small generated schema** — the generated schema stays compact even when supporting self-relations and deeply nested relations, thanks to configurable depth limiting (`limitRelationDepth`, `limitSelfRelationDepth`), per-relation pruning (`pruneRelations`), and per-table control (`tables.exclude`, per-table `queries`/`mutations` toggles) — up to 90% schema size reduction when tuned
+- **Native PostgreSQL JSON/JSONB support** — `json` and `jsonb` columns map to a custom `JSON` GraphQL scalar, so structured data passes through without manual type wiring
 - **Relation-level filtering** with EXISTS subqueries (`some`/`every`/`none` quantifiers)
 - **Per-operation hooks system** (before/after/resolve) for auth, audit, and custom logic
 - **Count queries** with full filter support
 - **`buildEntities()`** for composable schema building (avoids redundant schema validation)
 - **Configurable query/mutation suffixes** for naming customization
-- **Per-table schema control** — exclude tables, disable queries/mutations per table (up to 90% schema size reduction)
 - **Self-relation depth limiting** — separate from general depth, prevents exponential type growth
 - **Relation pruning** — `false`, `'leaf'`, or `{ only: [...] }` per relation
 - **`buildSchemaFromDrizzle()`** — no database connection needed (for codegen/introspection)
