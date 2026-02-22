@@ -112,7 +112,7 @@ describe('remapToGraphQLSingleOutput', () => {
     const output = { id: '1', name: null, bio: undefined, age: 42 }
     // biome-ignore lint/suspicious/noExplicitAny: mock data for testing
     remapToGraphQLSingleOutput(output as any, 'test', testTable)
-    expect(output).toEqual({ id: '1', age: 42 })
+    expect(output).toEqual({ id: '1', age: 42 } as typeof output)
   })
 })
 
@@ -126,7 +126,7 @@ describe('remapToGraphQLArrayOutput', () => {
     ]
     // biome-ignore lint/suspicious/noExplicitAny: mock data for testing
     remapToGraphQLArrayOutput(output as any, 'test', testTable)
-    expect(output).toEqual([{ id: '1' }, { id: '2' }])
+    expect(output).toEqual([{ id: '1' }, { id: '2' }] as typeof output)
   })
 })
 
@@ -195,7 +195,7 @@ describe('remapFromGraphQLSingleInput', () => {
     const input = { id: '1', name: undefined }
     // biome-ignore lint/suspicious/noExplicitAny: mock input for testing
     remapFromGraphQLSingleInput(input as any, testTable)
-    expect(input).toEqual({ id: '1' })
+    expect(input).toEqual({ id: '1' } as typeof input)
   })
 
   test('throws for unknown column', () => {
@@ -207,7 +207,7 @@ describe('remapFromGraphQLSingleInput', () => {
     const input = { name: null, id: '1' }
     // biome-ignore lint/suspicious/noExplicitAny: mock input for testing
     remapFromGraphQLSingleInput(input as any, testTable)
-    expect(input).toEqual({ id: '1' })
+    expect(input).toEqual({ id: '1' } as typeof input)
   })
 
   test('keeps null for nullable columns', () => {

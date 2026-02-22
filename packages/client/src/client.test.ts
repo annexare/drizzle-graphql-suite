@@ -36,7 +36,7 @@ function mockFetch(response: {
   throwError?: Error
 }) {
   if (response.throwError) {
-    globalThis.fetch = mock(() => Promise.reject(response.throwError)) as typeof fetch
+    globalThis.fetch = mock(() => Promise.reject(response.throwError)) as unknown as typeof fetch
     return
   }
 
@@ -48,7 +48,7 @@ function mockFetch(response: {
         statusText: response.statusText ?? 'OK',
         json: response.json ?? (() => Promise.resolve({ data: {} })),
       }) as Promise<Response>,
-  ) as typeof fetch
+  ) as unknown as typeof fetch
 }
 
 // ─── Constructor & entity ────────────────────────────────────
@@ -79,10 +79,8 @@ describe('execute', () => {
     await client.execute('query { users { id } }', { limit: 10 })
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(1)
-    const [url, options] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [
-      string,
-      RequestInit,
-    ]
+    const [url, options] = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock
+      .calls[0] as [string, RequestInit]
     expect(url).toBe('http://test/graphql')
     expect(options.method).toBe('POST')
     expect(JSON.parse(options.body as string)).toEqual({
@@ -97,7 +95,7 @@ describe('execute', () => {
     const client = new GraphQLClient({ url: () => 'http://dynamic/gql', schema: testSchema })
     await client.execute('query { users { id } }')
 
-    const [url] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string]
+    const [url] = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls[0] as [string]
     expect(url).toBe('http://dynamic/gql')
   })
 
@@ -111,7 +109,7 @@ describe('execute', () => {
     })
     await client.execute('query {}')
 
-    const [, options] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [
+    const [, options] = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls[0] as [
       string,
       RequestInit,
     ]
@@ -130,7 +128,7 @@ describe('execute', () => {
     })
     await client.execute('query {}')
 
-    const [, options] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [
+    const [, options] = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls[0] as [
       string,
       RequestInit,
     ]
@@ -209,7 +207,7 @@ describe('error handling', () => {
   })
 
   test('fetch throws non-Error wraps in NetworkError with generic message', async () => {
-    globalThis.fetch = mock(() => Promise.reject('network down')) as typeof fetch
+    globalThis.fetch = mock(() => Promise.reject('network down')) as unknown as typeof fetch
 
     const client = new GraphQLClient({ url: 'http://test', schema: testSchema })
     try {

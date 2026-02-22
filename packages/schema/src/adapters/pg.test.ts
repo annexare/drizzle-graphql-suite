@@ -23,11 +23,9 @@ function createChainableMock(resolvedValue: unknown[] = []) {
     },
   }
 
-  return new Proxy({}, handler) as {
-    _calls: Call[]
-    // biome-ignore lint/suspicious/noExplicitAny: chainable mock
-    [key: string]: (...args: any[]) => any
-  }
+  // biome-ignore lint/suspicious/noExplicitAny: chainable mock proxy
+  const proxy = new Proxy({}, handler) as any
+  return proxy as { _calls: Call[] }
 }
 
 function createMockDb(resolvedValue: unknown[] = []) {
