@@ -1,7 +1,16 @@
 {
   "name": "@drizzle-graphql-suite/schema",
   "type": "module",
-  "private": true,
+  "description": "GraphQL schema builder with CRUD operations, relation filtering, and hooks from Drizzle ORM",
+  "keywords": [
+    "drizzle",
+    "graphql",
+    "schema",
+    "orm",
+    "postgresql",
+    "crud",
+    "typescript"
+  ],
   "exports": {
     ".": {
       "import": "./src/index.ts"

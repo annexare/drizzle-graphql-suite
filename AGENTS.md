@@ -173,4 +173,4 @@ Use ASCII box-style section headers to organize long files:
 
 - Use exact versions for `bun install` (configured in `bunfig.toml`: `exact = true`)
 - Peer dependencies specify minimum versions with `>=` (e.g., `"drizzle-orm": ">=0.44.0"`)
-- All packages are `"private": true` (not published individually, consumed via root exports)
+- Packages are published to npm; the root re-exports all three via subpath exports

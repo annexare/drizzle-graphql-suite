@@ -1,7 +1,16 @@
 {
   "name": "@drizzle-graphql-suite/query",
   "type": "module",
-  "private": true,
+  "description": "React Query hooks for the Drizzle GraphQL client with caching and automatic invalidation",
+  "keywords": [
+    "drizzle",
+    "graphql",
+    "react",
+    "react-query",
+    "tanstack",
+    "hooks",
+    "typescript"
+  ],
   "exports": {
     ".": {
       "import": "./src/index.ts"
