@@ -121,6 +121,45 @@ function UserList() {
 }
 ```
 
+## Framework Integration Examples
+
+`buildSchema()` returns a standard `GraphQLSchema` — here's how to serve it from popular frameworks.
+
+### Next.js App Router
+
+```ts
+// app/api/graphql/route.ts
+import { createYoga } from 'graphql-yoga'
+import { buildSchema } from 'drizzle-graphql-suite/schema'
+import { db } from '@/db'
+
+const { schema } = buildSchema(db)
+
+const { handleRequest } = createYoga({
+  schema,
+  graphqlEndpoint: '/api/graphql',
+  fetchAPI: { Response },
+})
+
+export { handleRequest as GET, handleRequest as POST }
+```
+
+### ElysiaJS
+
+```ts
+// server.ts
+import { Elysia } from 'elysia'
+import { yoga } from '@elysiajs/graphql-yoga'
+import { buildSchema } from 'drizzle-graphql-suite/schema'
+import { db } from './db'
+
+const { schema } = buildSchema(db)
+
+new Elysia()
+  .use(yoga({ schema }))
+  .listen(3000)
+```
+
 ## License
 
 MIT

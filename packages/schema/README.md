@@ -62,6 +62,37 @@ const { schema, entities } = buildSchema(db, {
 const yoga = createYoga({ schema })
 ```
 
+#### Framework Integration
+
+**Next.js App Router**
+
+```ts
+// app/api/graphql/route.ts
+import { createYoga } from 'graphql-yoga'
+import { schema } from '@/lib/schema' // from buildSchema() above
+
+const { handleRequest } = createYoga({
+  schema,
+  graphqlEndpoint: '/api/graphql',
+  fetchAPI: { Response },
+})
+
+export { handleRequest as GET, handleRequest as POST }
+```
+
+**ElysiaJS**
+
+```ts
+// server.ts
+import { Elysia } from 'elysia'
+import { yoga } from '@elysiajs/graphql-yoga'
+import { schema } from './schema' // from buildSchema() above
+
+new Elysia()
+  .use(yoga({ schema }))
+  .listen(3000)
+```
+
 ### `buildEntities(db, config?)`
 
 Returns `GeneratedEntities` only — queries, mutations, inputs, and types — without constructing a `GraphQLSchema`. Use this when composing into a larger schema (e.g., Pothos) to avoid redundant schema validation.
