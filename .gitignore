@@ -2,3 +2,11 @@ node_modules
 dist
 .DS_Store
 *.tsbuildinfo
+
+# Generated root wrapper files
+/schema.js
+/schema.d.ts
+/client.js
+/client.d.ts
+/query.js
+/query.d.ts
