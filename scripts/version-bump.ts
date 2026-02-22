@@ -33,7 +33,7 @@ async function updatePackageJson(filePath: string, version: string) {
   const pkg = await file.json()
   pkg.version = version
 
-  // Keep root dependencies on workspace packages in sync
+  // Keep @drizzle-graphql-suite/* dependencies in sync across all packages
   if (pkg.dependencies) {
     for (const dep of Object.keys(pkg.dependencies)) {
       if (dep.startsWith('@drizzle-graphql-suite/')) {
@@ -67,6 +67,17 @@ async function main() {
   await Promise.all(packageJsonPaths.map((p) => updatePackageJson(p, newVersion)))
 
   console.log(`Updated ${packageJsonPaths.length} packages to v${newVersion}`)
+
+  // Sync bun.lock with updated package.json versions
+  console.log('Running `bun install` to sync bun.lock...')
+  const result = Bun.spawnSync(['bun', 'install'], {
+    cwd: rootDir,
+    stdout: 'inherit',
+    stderr: 'inherit',
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(`bun install failed with exit code ${result.exitCode}`)
+  }
 }
 
 main().catch((err) => {
