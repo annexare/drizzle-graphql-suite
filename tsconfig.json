@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "paths": {
+      "drizzle-graphql-suite/client": ["./packages/client/src/index.ts"],
+      "drizzle-graphql-suite/schema": ["./packages/schema/src/index.ts"],
+      "drizzle-graphql-suite/query": ["./packages/query/src/index.ts"]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "drizzle-graphql-suite",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./schema": {
+      "import": "./packages/schema/dist/index.js",
+      "types": "./packages/schema/dist/index.d.ts"
+    },
+    "./client": {
+      "import": "./packages/client/dist/index.js",
+      "types": "./packages/client/dist/index.d.ts"
+    },
+    "./query": {
+      "import": "./packages/query/dist/index.js",
+      "types": "./packages/query/dist/index.d.ts"
+    }
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '@drizzle-graphql-suite/schema' --filter '@drizzle-graphql-suite/client' build && bun run --filter '@drizzle-graphql-suite/query' build",
+    "check-types": "bun run --filter '*' check-types",
+    "test": "bun run --filter '*' test",
+    "lint": "bunx @biomejs/biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.4",
+    "typescript": "5.9.3"
+  }
+}

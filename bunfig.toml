@@ -1,0 +1,8 @@
+[install]
+exact = true
+
+[test]
+coverage = true
+
+[run]
+bun = true

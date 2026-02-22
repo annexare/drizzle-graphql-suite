@@ -1,0 +1,57 @@
+import { type UseQueryResult, useQuery } from '@tanstack/react-query'
+import type {
+  AnyEntityDefs,
+  EntityClient,
+  EntityDef,
+  InferResult,
+} from 'drizzle-graphql-suite/client'
+
+type EntityQueryParams<TEntity extends EntityDef, TSelect extends Record<string, unknown>> = {
+  select: TSelect
+  where?: TEntity extends { filters: infer F } ? F : never
+  offset?: number
+  orderBy?: TEntity extends { orderBy: infer O } ? O : never
+}
+
+type EntityQueryOptions = {
+  enabled?: boolean
+  gcTime?: number
+  staleTime?: number
+  refetchOnWindowFocus?: boolean
+  queryKey?: unknown[]
+}
+
+export function useEntityQuery<
+  TDefs extends AnyEntityDefs,
+  TEntity extends EntityDef,
+  TSelect extends Record<string, unknown>,
+>(
+  entity: EntityClient<TDefs, TEntity>,
+  params: EntityQueryParams<TEntity, TSelect>,
+  options?: EntityQueryOptions,
+): UseQueryResult<InferResult<TDefs, TEntity, TSelect> | null> {
+  const queryKey = options?.queryKey ?? [
+    'gql',
+    'single',
+    params.select,
+    params.where,
+    params.orderBy,
+    params.offset,
+  ]
+
+  return useQuery({
+    queryKey,
+    queryFn: async () => {
+      // biome-ignore lint/suspicious/noExplicitAny: generic entity params
+      return (await entity.querySingle(params as any)) as InferResult<
+        TDefs,
+        TEntity,
+        TSelect
+      > | null
+    },
+    enabled: options?.enabled,
+    gcTime: options?.gcTime,
+    staleTime: options?.staleTime,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus,
+  })
+}
