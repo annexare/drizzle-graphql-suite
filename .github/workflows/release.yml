@@ -19,6 +19,11 @@ jobs:
         with:
           bun-version: 1.3.9
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run check-types
@@ -27,14 +32,10 @@ jobs:
       - run: bun run prepare-publish
 
       - run: |
-          npm publish packages/schema/dist --access public
-          npm publish packages/client/dist --access public
-          npm publish packages/query/dist --access public
-          npm publish --access public
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          npm publish packages/schema/dist --provenance --access public
+          npm publish packages/client/dist --provenance --access public
+          npm publish packages/query/dist --provenance --access public
+          npm publish --provenance --access public
 
       - name: Create GitHub Release
         run: gh release create "${{ github.ref_name }}" --generate-notes
