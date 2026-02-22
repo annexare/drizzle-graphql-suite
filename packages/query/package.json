@@ -1,7 +1,16 @@
 {
   "name": "@drizzle-graphql-suite/query",
+  "version": "0.5.0",
   "type": "module",
   "description": "React Query hooks for the Drizzle GraphQL client with caching and automatic invalidation",
+  "license": "MIT",
+  "author": "https://github.com/dmythro",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/annexare/drizzle-graphql-suite.git",
+    "directory": "packages/query"
+  },
+  "homepage": "https://github.com/annexare/drizzle-graphql-suite/tree/main/packages/query#readme",
   "keywords": [
     "drizzle",
     "graphql",
@@ -17,11 +26,12 @@
     }
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target browser --external react --external @tanstack/react-query --external drizzle-graphql-suite && tsc -p tsconfig.build.json",
+    "build": "bun build src/index.ts --outdir dist --target browser --external react --external @tanstack/react-query --external @drizzle-graphql-suite/client && tsc -p tsconfig.build.json",
     "check-types": "tsc --noEmit",
     "test": "bun test"
   },
   "peerDependencies": {
+    "@drizzle-graphql-suite/client": ">=0.5.0",
     "@tanstack/react-query": ">=5.0.0",
     "react": ">=18.0.0"
   },

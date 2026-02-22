@@ -3,7 +3,7 @@ import type {
   EntityClient,
   EntityDef,
   SchemaDescriptor,
-} from 'drizzle-graphql-suite/client'
+} from '@drizzle-graphql-suite/client'
 import { useMemo } from 'react'
 
 import { useGraphQLClient } from './provider'
