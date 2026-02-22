@@ -1,4 +1,4 @@
-import { copyFile, exists, mkdir, readdir } from 'node:fs/promises'
+import { mkdir, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
 const rootDir = resolve(import.meta.dirname, '..')
@@ -21,9 +21,7 @@ async function preparePackage(packageDir: string) {
   const srcPkg = await Bun.file(join(packageDir, 'package.json')).json()
   const distDir = join(packageDir, 'dist')
 
-  if (!(await exists(distDir))) {
-    await mkdir(distDir, { recursive: true })
-  }
+  await mkdir(distDir, { recursive: true })
 
   // biome-ignore lint/suspicious/noExplicitAny: building dynamic object
   const publishPkg: Record<string, any> = {}
@@ -55,17 +53,17 @@ async function preparePackage(packageDir: string) {
   await Bun.write(join(distDir, 'package.json'), `${JSON.stringify(publishPkg, null, 2)}\n`)
 
   // Copy README with relative links rewritten to absolute GitHub URLs
-  const readmePath = join(packageDir, 'README.md')
-  if (await exists(readmePath)) {
-    let readme = await Bun.file(readmePath).text()
+  const readmeFile = Bun.file(join(packageDir, 'README.md'))
+  if (await readmeFile.exists()) {
+    let readme = await readmeFile.text()
     readme = readme.replace(/\.\.\/(schema|client|query)\/README\.md/g, `${GITHUB_PACKAGES}/$1`)
     await Bun.write(join(distDir, 'README.md'), readme)
   }
 
   // Copy root LICENSE
-  const licensePath = join(rootDir, 'LICENSE')
-  if (await exists(licensePath)) {
-    await copyFile(licensePath, join(distDir, 'LICENSE'))
+  const licenseFile = Bun.file(join(rootDir, 'LICENSE'))
+  if (await licenseFile.exists()) {
+    await Bun.write(join(distDir, 'LICENSE'), licenseFile)
   }
 
   console.log(`Prepared ${srcPkg.name} for publishing`)
