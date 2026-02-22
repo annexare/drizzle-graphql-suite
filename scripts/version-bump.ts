@@ -32,6 +32,16 @@ async function updatePackageJson(filePath: string, version: string) {
   const file = Bun.file(filePath)
   const pkg = await file.json()
   pkg.version = version
+
+  // Keep root dependencies on workspace packages in sync
+  if (pkg.dependencies) {
+    for (const dep of Object.keys(pkg.dependencies)) {
+      if (dep.startsWith('@drizzle-graphql-suite/')) {
+        pkg.dependencies[dep] = version
+      }
+    }
+  }
+
   await Bun.write(file, `${JSON.stringify(pkg, null, 2)}\n`)
 }
 
