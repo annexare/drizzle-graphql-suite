@@ -49,7 +49,10 @@
     "build": "bun run --filter '@drizzle-graphql-suite/schema' --filter '@drizzle-graphql-suite/client' build && bun run --filter '@drizzle-graphql-suite/query' build",
     "check-types": "bun run --filter '*' check-types",
     "test": "bun run --filter '*' test",
-    "lint": "bunx @biomejs/biome check --write ."
+    "lint": "bunx @biomejs/biome check --write .",
+    "lint:check": "bunx @biomejs/biome check .",
+    "check": "bun run check-types && bun run lint:check && bun run test",
+    "ci": "bun run check-types && bun run lint:check && bun run test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.4",
