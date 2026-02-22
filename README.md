@@ -1,0 +1,126 @@
+# drizzle-graphql-suite
+
+Auto-generated GraphQL CRUD, type-safe clients, and React Query hooks from Drizzle PostgreSQL schemas.
+
+## Overview
+
+`drizzle-graphql-suite` is a three-layer toolkit that turns your Drizzle ORM schema into a fully working GraphQL API with end-to-end type safety:
+
+1. **Schema builder** — generates a complete GraphQL schema with CRUD operations, relation-level filtering, and per-operation hooks from Drizzle table definitions.
+2. **Client** — provides a type-safe GraphQL client that infers query/mutation types directly from your Drizzle schema, with full TypeScript support for filters, relations, and results.
+3. **React Query hooks** — wraps the client in TanStack React Query hooks for caching, pagination, and mutations with automatic cache invalidation.
+
+Inspired by [`drizzle-graphql`](https://github.com/drizzle-team/drizzle-graphql), rewritten with significant improvements including relation-level filtering, hooks, count queries, configurable schema generation, and code generation.
+
+## Packages
+
+| Subpath | Package | Description |
+|---------|---------|-------------|
+| `drizzle-graphql-suite/schema` | [`@drizzle-graphql-suite/schema`](packages/schema/README.md) | GraphQL schema builder with CRUD, filtering, hooks, and codegen |
+| `drizzle-graphql-suite/client` | [`@drizzle-graphql-suite/client`](packages/client/README.md) | Type-safe GraphQL client with full Drizzle type inference |
+| `drizzle-graphql-suite/query` | [`@drizzle-graphql-suite/query`](packages/query/README.md) | TanStack React Query hooks for the client |
+
+## Installation
+
+```bash
+bun add drizzle-graphql-suite
+```
+
+```bash
+npm install drizzle-graphql-suite
+```
+
+## Peer Dependencies
+
+Each subpath import has its own peer dependency requirements:
+
+| Subpath | Peer Dependencies |
+|---------|-------------------|
+| `./schema` | `drizzle-orm` >=0.44.0, `graphql` >=16.3.0 |
+| `./client` | `drizzle-orm` >=0.44.0 |
+| `./query` | `react` >=18.0.0, `@tanstack/react-query` >=5.0.0 |
+
+## Quick Start
+
+### 1. Server — Build GraphQL Schema
+
+```ts
+import { buildSchema } from 'drizzle-graphql-suite/schema'
+import { createYoga } from 'graphql-yoga'
+import { createServer } from 'node:http'
+import { db } from './db'
+
+const { schema } = buildSchema(db, {
+  tables: { exclude: ['session', 'verification'] },
+  hooks: {
+    user: {
+      query: {
+        before: async ({ context }) => {
+          if (!context.user) throw new Error('Unauthorized')
+        },
+      },
+    },
+  },
+})
+
+const yoga = createYoga({ schema })
+const server = createServer(yoga)
+server.listen(4000)
+```
+
+### 2. Client — Type-Safe Queries
+
+```ts
+import { createDrizzleClient } from 'drizzle-graphql-suite/client'
+import * as schema from './db/schema'
+
+const client = createDrizzleClient({
+  schema,
+  config: { suffixes: { list: 's' } },
+  url: '/api/graphql',
+})
+
+const users = await client.entity('user').query({
+  select: {
+    id: true,
+    name: true,
+    posts: { id: true, title: true },
+  },
+  where: { name: { ilike: '%john%' } },
+  limit: 10,
+})
+```
+
+### 3. React — Query Hooks
+
+```tsx
+import { GraphQLProvider, useEntity, useEntityList } from 'drizzle-graphql-suite/query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+const queryClient = new QueryClient()
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GraphQLProvider client={graphqlClient}>
+        <UserList />
+      </GraphQLProvider>
+    </QueryClientProvider>
+  )
+}
+
+function UserList() {
+  const user = useEntity('user')
+  const { data, isLoading } = useEntityList(user, {
+    select: { id: true, name: true, email: true },
+    limit: 20,
+  })
+
+  if (isLoading) return <div>Loading...</div>
+  return <ul>{data?.map((u) => <li key={u.id}>{u.name}</li>)}</ul>
+}
+```
+
+## License
+
+MIT
