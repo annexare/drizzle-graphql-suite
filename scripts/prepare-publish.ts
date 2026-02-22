@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path'
 
 const rootDir = resolve(import.meta.dirname, '..')
 const packagesDir = join(rootDir, 'packages')
+const GITHUB_PACKAGES = 'https://github.com/annexare/drizzle-graphql-suite/tree/main/packages'
 
 const FIELDS_TO_COPY = [
   'name',
@@ -53,10 +54,12 @@ async function preparePackage(packageDir: string) {
 
   await Bun.write(join(distDir, 'package.json'), `${JSON.stringify(publishPkg, null, 2)}\n`)
 
-  // Copy README if it exists
+  // Copy README with relative links rewritten to absolute GitHub URLs
   const readmePath = join(packageDir, 'README.md')
   if (await exists(readmePath)) {
-    await copyFile(readmePath, join(distDir, 'README.md'))
+    let readme = await Bun.file(readmePath).text()
+    readme = readme.replace(/\.\.\/(schema|client|query)\/README\.md/g, `${GITHUB_PACKAGES}/$1`)
+    await Bun.write(join(distDir, 'README.md'), readme)
   }
 
   // Copy root LICENSE
