@@ -3,6 +3,8 @@ exact = true
 
 [test]
 coverage = true
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = ["**/test-setup.ts", "**/test-utils.*"]
 
 [run]
 bun = true
