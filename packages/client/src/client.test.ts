@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { relations } from 'drizzle-orm'
+import { pgTable, text, uuid } from 'drizzle-orm/pg-core'
 
-import { GraphQLClient } from './client'
+import { createDrizzleClient, GraphQLClient } from './client'
 import { GraphQLClientError, NetworkError } from './errors'
 import type { SchemaDescriptor } from './types'
 
@@ -204,5 +206,73 @@ describe('error handling', () => {
       expect(e).toBeInstanceOf(GraphQLClientError)
       expect((e as GraphQLClientError).message).toBe('No data in response')
     }
+  })
+
+  test('fetch throws non-Error wraps in NetworkError with generic message', async () => {
+    globalThis.fetch = mock(() => Promise.reject('network down')) as typeof fetch
+
+    const client = new GraphQLClient({ url: 'http://test', schema: testSchema })
+    try {
+      await client.execute('query {}')
+      expect.unreachable('should have thrown')
+    } catch (e) {
+      expect(e).toBeInstanceOf(NetworkError)
+      expect((e as NetworkError).message).toBe('Network request failed')
+      expect((e as NetworkError).status).toBe(0)
+    }
+  })
+})
+
+// ─── createDrizzleClient factory ────────────────────────────
+
+describe('createDrizzleClient', () => {
+  const author = pgTable('author', {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+  })
+
+  const post = pgTable('post', {
+    id: uuid().primaryKey().defaultRandom(),
+    title: text().notNull(),
+    authorId: uuid()
+      .notNull()
+      .references(() => author.id),
+  })
+
+  const authorRelations = relations(author, ({ many }) => ({
+    posts: many(post),
+  }))
+
+  const postRelations = relations(post, ({ one }) => ({
+    author: one(author, { fields: [post.authorId], references: [author.id] }),
+  }))
+
+  test('creates a GraphQLClient with working entity()', () => {
+    const client = createDrizzleClient({
+      schema: { author, post, authorRelations, postRelations },
+      config: {},
+      url: 'http://test/graphql',
+    })
+
+    expect(client).toBeInstanceOf(GraphQLClient)
+    const authorEntity = client.entity('author')
+    expect(authorEntity).toBeDefined()
+    expect(typeof authorEntity.query).toBe('function')
+  })
+
+  test('entity has correct operation methods', () => {
+    const client = createDrizzleClient({
+      schema: { author, post, authorRelations, postRelations },
+      config: {},
+      url: 'http://test/graphql',
+    })
+
+    const authorEntity = client.entity('author')
+    expect(typeof authorEntity.query).toBe('function')
+    expect(typeof authorEntity.querySingle).toBe('function')
+    expect(typeof authorEntity.count).toBe('function')
+    expect(typeof authorEntity.insert).toBe('function')
+    expect(typeof authorEntity.update).toBe('function')
+    expect(typeof authorEntity.delete).toBe('function')
   })
 })

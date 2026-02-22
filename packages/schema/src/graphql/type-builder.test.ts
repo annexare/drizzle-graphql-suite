@@ -22,9 +22,11 @@ import {
   GraphQLBoolean,
   GraphQLEnumType,
   GraphQLFloat,
+  GraphQLInputObjectType,
   GraphQLInt,
   GraphQLList,
   GraphQLNonNull,
+  GraphQLObjectType,
   GraphQLString,
 } from 'graphql'
 
@@ -202,6 +204,59 @@ describe('buffer', () => {
     const fakeCol = { dataType: 'buffer', notNull: false } as Column
     const { type } = drizzleColumnToGraphQLType(fakeCol, 'data', 'buf_test', true)
     expect(type).toBeInstanceOf(GraphQLList)
+  })
+})
+
+// ─── Spatial & Array types ───────────────────────────────────
+
+describe('PgGeometryObject', () => {
+  test('output returns GraphQLObjectType named PgGeometryObject', () => {
+    const fakeCol = { dataType: 'json', columnType: 'PgGeometryObject', notNull: false } as Column
+    const { type, description } = drizzleColumnToGraphQLType(fakeCol, 'geo', 'geo_test', true)
+    expect(type).toBeInstanceOf(GraphQLObjectType)
+    expect((type as GraphQLObjectType).name).toBe('PgGeometryObject')
+    expect(description).toBe('Geometry points XY')
+  })
+
+  test('input returns GraphQLInputObjectType named PgGeometryObjectInput', () => {
+    const fakeCol = { dataType: 'json', columnType: 'PgGeometryObject', notNull: false } as Column
+    const { type } = drizzleColumnToGraphQLType(fakeCol, 'geo', 'geo_test', true, false, true)
+    expect(type).toBeInstanceOf(GraphQLInputObjectType)
+    expect((type as GraphQLInputObjectType).name).toBe('PgGeometryObjectInput')
+  })
+})
+
+describe('PgVector', () => {
+  test('maps to List(NonNull(Float))', () => {
+    const fakeCol = { dataType: 'array', columnType: 'PgVector', notNull: false } as Column
+    const { type, description } = drizzleColumnToGraphQLType(fakeCol, 'vec', 'vec_test', true)
+    expect(type).toBeInstanceOf(GraphQLList)
+    const inner = (type as GraphQLList<typeof GraphQLFloat>).ofType
+    expect(inner).toBeInstanceOf(GraphQLNonNull)
+    expect(description).toBe('Array<Float>')
+  })
+})
+
+describe('PgGeometry array', () => {
+  test('maps to List(NonNull(Float))', () => {
+    const fakeCol = { dataType: 'array', columnType: 'PgGeometry', notNull: false } as Column
+    const { type, description } = drizzleColumnToGraphQLType(fakeCol, 'geo', 'geo_test', true)
+    expect(type).toBeInstanceOf(GraphQLList)
+    expect(description).toBe('Tuple<[Float, Float]>')
+  })
+})
+
+describe('generic PgArray', () => {
+  test('maps to List(NonNull(innerType))', () => {
+    const fakeCol = {
+      dataType: 'array',
+      columnType: 'PgArray',
+      notNull: false,
+      baseColumn: { dataType: 'string', notNull: false },
+    } as unknown as Column
+    const { type, description } = drizzleColumnToGraphQLType(fakeCol, 'tags', 'arr_test', true)
+    expect(type).toBeInstanceOf(GraphQLList)
+    expect(description).toBe('Array<String>')
   })
 })
 

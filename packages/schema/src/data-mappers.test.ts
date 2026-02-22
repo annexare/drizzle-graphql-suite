@@ -14,11 +14,13 @@ import {
 import { GraphQLError } from 'graphql'
 
 import {
+  remapFromGraphQLArrayInput,
   remapFromGraphQLCore,
   remapFromGraphQLSingleInput,
   remapToGraphQLArrayOutput,
   remapToGraphQLCore,
   remapToGraphQLSingleOutput,
+  type TableNamedRelations,
 } from './data-mappers'
 
 // ─── Helper: minimal column-like object ─────────────────────
@@ -213,5 +215,62 @@ describe('remapFromGraphQLSingleInput', () => {
     // biome-ignore lint/suspicious/noExplicitAny: mock input for testing
     remapFromGraphQLSingleInput(input as any, testTable)
     expect('bio' in input).toBe(true)
+  })
+})
+
+// ─── Relation delegation in remapToGraphQLCore ──────────────
+
+describe('remapToGraphQLCore relation delegation', () => {
+  const itemTable = pgTable('item', {
+    id: uuid().primaryKey().defaultRandom(),
+    title: text().notNull(),
+  })
+
+  const relationMap: Record<string, Record<string, TableNamedRelations>> = {
+    test: {
+      items: {
+        targetTableName: 'item',
+        relation: { referencedTable: itemTable } as unknown as import('drizzle-orm').Relation,
+      },
+    },
+  }
+
+  test('array value with matching relation delegates to remapToGraphQLArrayOutput', () => {
+    const arrayVal = [
+      { id: '1', title: 'A' },
+      { id: '2', title: 'B' },
+    ]
+    const result = remapToGraphQLCore('items', arrayVal, 'test', makeCol('array'), relationMap)
+    expect(result).toEqual([
+      { id: '1', title: 'A' },
+      { id: '2', title: 'B' },
+    ])
+  })
+
+  test('object value with matching relation delegates to remapToGraphQLSingleOutput', () => {
+    const objVal = { id: '1', title: 'A' }
+    const result = remapToGraphQLCore('items', objVal, 'test', makeCol('json'), relationMap)
+    expect(result).toEqual({ id: '1', title: 'A' })
+  })
+})
+
+// ─── remapFromGraphQLArrayInput ─────────────────────────────
+
+describe('remapFromGraphQLArrayInput', () => {
+  test('processes each entry through remapFromGraphQLSingleInput', () => {
+    const input = [
+      { id: '1', name: 'Alice' },
+      { id: '2', name: undefined },
+    ]
+    // biome-ignore lint/suspicious/noExplicitAny: mock input for testing
+    const result = remapFromGraphQLArrayInput(input as any, testTable)
+    expect(result[0]).toEqual({ id: '1', name: 'Alice' })
+    // undefined values should be stripped
+    expect(result[1]).toEqual({ id: '2' })
+  })
+
+  test('throws for unknown columns', () => {
+    const input = [{ unknownCol: 'value' }]
+    expect(() => remapFromGraphQLArrayInput(input, testTable)).toThrow()
   })
 })

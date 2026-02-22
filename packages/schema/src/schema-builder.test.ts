@@ -2,10 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   createTableRelationsHelpers,
   extractTablesRelationalConfig,
+  getTableColumns,
   relations,
   type SQL,
 } from 'drizzle-orm'
-import { pgSchema, pgTable, text, uuid } from 'drizzle-orm/pg-core'
+import { integer, pgSchema, pgTable, text, uuid } from 'drizzle-orm/pg-core'
 
 import { SchemaBuilder } from './schema-builder'
 
@@ -636,5 +637,325 @@ describe('pruneRelations', () => {
       expect(innerFields.tags).toBeUndefined()
       expect(innerFields.parentNode).toBeUndefined()
     }
+  })
+})
+
+// ─── Constructor error paths ─────────────────────────────────
+
+describe('constructor error paths', () => {
+  test('missing schema throws', () => {
+    const badDb = { _: { fullSchema: undefined } }
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    expect(() => new SchemaBuilder(badDb as any)).toThrow('Schema not found')
+  })
+
+  test('negative limitRelationDepth throws', () => {
+    const mockDb = createMockDb()
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    expect(() => new SchemaBuilder(mockDb as any, { limitRelationDepth: -1 })).toThrow(
+      'nonnegative integer',
+    )
+  })
+
+  test('float limitRelationDepth throws', () => {
+    const mockDb = createMockDb()
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    expect(() => new SchemaBuilder(mockDb as any, { limitRelationDepth: 2.5 })).toThrow(
+      'nonnegative integer',
+    )
+  })
+
+  test('same list/single suffixes throws', () => {
+    const mockDb = createMockDb()
+    expect(
+      // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+      () => new SchemaBuilder(mockDb as any, { suffixes: { list: 'X', single: 'X' } }),
+    ).toThrow('cannot be the same')
+  })
+})
+
+// ─── mutations: false ───────────────────────────────────────
+
+describe('mutations: false config', () => {
+  test('build() with mutations: false returns schema with no mutation type', () => {
+    const mockDb = createMockDb()
+    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    ;(mockDb as any).query = { parent: findStub, child: findStub }
+
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    const builder = new SchemaBuilder(mockDb as any, { mutations: false })
+    const result = builder.build()
+
+    expect(result.schema.getMutationType()).toBeUndefined()
+  })
+})
+
+// ─── logDebugInfo ───────────────────────────────────────────
+
+describe('logDebugInfo', () => {
+  test('debug: true does not throw', () => {
+    const mockDb = createMockDb()
+    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    ;(mockDb as any).query = { parent: findStub, child: findStub }
+
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    const builder = new SchemaBuilder(mockDb as any, { debug: true })
+    expect(() => builder.build()).not.toThrow()
+  })
+
+  test('debug: { relationTree: true } does not throw', () => {
+    const mockDb = createMockDb()
+    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    ;(mockDb as any).query = { parent: findStub, child: findStub }
+
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    const builder = new SchemaBuilder(mockDb as any, { debug: { relationTree: true } })
+    expect(() => builder.build()).not.toThrow()
+  })
+})
+
+// ─── extractColumnFilters ───────────────────────────────────
+
+describe('extractColumnFilters', () => {
+  function getBuilder() {
+    const mockDb = createMockDb()
+    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    ;(mockDb as any).query = { parent: findStub, child: findStub }
+    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
+    return new SchemaBuilder(mockDb as any) as any
+  }
+
+  const parentTable = pgTable('filter_test', {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+    age: integer(),
+  })
+  const parentCols = getTableColumns(parentTable)
+
+  test('eq operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', { eq: 'Alice' })
+    expect(result).toBeDefined()
+  })
+
+  test('ne operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', { ne: 'Bob' })
+    expect(result).toBeDefined()
+  })
+
+  test('gt operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.age, 'age', { gt: 18 })
+    expect(result).toBeDefined()
+  })
+
+  test('gte operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.age, 'age', { gte: 18 })
+    expect(result).toBeDefined()
+  })
+
+  test('lt operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.age, 'age', { lt: 65 })
+    expect(result).toBeDefined()
+  })
+
+  test('lte operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.age, 'age', { lte: 65 })
+    expect(result).toBeDefined()
+  })
+
+  test('like operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', { like: '%Alice%' })
+    expect(result).toBeDefined()
+  })
+
+  test('notLike operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', { notLike: '%Bob%' })
+    expect(result).toBeDefined()
+  })
+
+  test('ilike operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', { ilike: '%alice%' })
+    expect(result).toBeDefined()
+  })
+
+  test('notIlike operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', { notIlike: '%bob%' })
+    expect(result).toBeDefined()
+  })
+
+  test('inArray operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      inArray: ['Alice', 'Bob'],
+    })
+    expect(result).toBeDefined()
+  })
+
+  test('notInArray operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      notInArray: ['Eve'],
+    })
+    expect(result).toBeDefined()
+  })
+
+  test('inArray with empty array throws', () => {
+    const builder = getBuilder()
+    expect(() => builder.extractColumnFilters(parentCols.name, 'name', { inArray: [] })).toThrow(
+      'empty array',
+    )
+  })
+
+  test('isNull operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.age, 'age', { isNull: true })
+    expect(result).toBeDefined()
+  })
+
+  test('isNotNull operator', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.age, 'age', { isNotNull: true })
+    expect(result).toBeDefined()
+  })
+
+  test('null/false operator values are skipped', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      eq: null,
+      ne: false,
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('multiple operators combine with AND', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.age, 'age', { gt: 18, lt: 65 })
+    expect(result).toBeDefined()
+  })
+
+  test('OR with variants', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      OR: [{ eq: 'Alice' }, { eq: 'Bob' }],
+    })
+    expect(result).toBeDefined()
+  })
+
+  test('OR with other fields throws', () => {
+    const builder = getBuilder()
+    expect(() =>
+      builder.extractColumnFilters(parentCols.name, 'name', {
+        eq: 'Alice',
+        OR: [{ eq: 'Bob' }],
+      }),
+    ).toThrow('Cannot specify both')
+  })
+})
+
+// ─── extractOrderBy ─────────────────────────────────────────
+
+describe('extractOrderBy', () => {
+  function getBuilder() {
+    const mockDb = createMockDb()
+    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    ;(mockDb as any).query = { parent: findStub, child: findStub }
+    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
+    return new SchemaBuilder(mockDb as any) as any
+  }
+
+  test('asc direction', () => {
+    const builder = getBuilder()
+    const result = builder.extractOrderBy(parent, { name: { direction: 'asc', priority: 1 } })
+    expect(result).toHaveLength(1)
+  })
+
+  test('desc direction', () => {
+    const builder = getBuilder()
+    const result = builder.extractOrderBy(parent, { name: { direction: 'desc', priority: 1 } })
+    expect(result).toHaveLength(1)
+  })
+
+  test('priority sorting (higher priority first)', () => {
+    const builder = getBuilder()
+    const result = builder.extractOrderBy(parent, {
+      id: { direction: 'asc', priority: 1 },
+      name: { direction: 'desc', priority: 10 },
+    })
+    expect(result).toHaveLength(2)
+  })
+
+  test('null config values skipped', () => {
+    const builder = getBuilder()
+    const result = builder.extractOrderBy(parent, {
+      name: null,
+      id: { direction: 'asc', priority: 1 },
+    })
+    expect(result).toHaveLength(1)
+  })
+
+  test('unknown column names skipped', () => {
+    const builder = getBuilder()
+    const result = builder.extractOrderBy(parent, {
+      nonexistent: { direction: 'asc', priority: 1 },
+    })
+    expect(result).toHaveLength(0)
+  })
+})
+
+// ─── extractColumns ─────────────────────────────────────────
+
+describe('extractColumns', () => {
+  function getBuilder() {
+    const mockDb = createMockDb()
+    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
+    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
+    ;(mockDb as any).query = { parent: findStub, child: findStub }
+    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
+    return new SchemaBuilder(mockDb as any) as any
+  }
+
+  test('selects matching table columns', () => {
+    const builder = getBuilder()
+    const tree = {
+      id: { name: 'id', fieldsByTypeName: {} },
+      name: { name: 'name', fieldsByTypeName: {} },
+    }
+    const result = builder.extractColumns(tree, parent)
+    expect(result).toEqual({ id: true, name: true })
+  })
+
+  test('ignores non-column fields (relations)', () => {
+    const builder = getBuilder()
+    const tree = {
+      id: { name: 'id', fieldsByTypeName: {} },
+      children: { name: 'children', fieldsByTypeName: {} },
+    }
+    const result = builder.extractColumns(tree, parent)
+    expect(result.id).toBe(true)
+    expect(result.children).toBeUndefined()
+  })
+
+  test('falls back to first column when no columns match', () => {
+    const builder = getBuilder()
+    const tree = {
+      children: { name: 'children', fieldsByTypeName: {} },
+    }
+    const result = builder.extractColumns(tree, parent)
+    // Should have exactly one key (the first column)
+    expect(Object.keys(result)).toHaveLength(1)
   })
 })
