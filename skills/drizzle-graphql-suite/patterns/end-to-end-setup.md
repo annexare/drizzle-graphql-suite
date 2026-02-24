@@ -196,6 +196,71 @@ createDrizzleClient({
 })
 ```
 
+## Adding Permissions
+
+Add role-based schema selection to an existing setup:
+
+### 1. Define Permission Configs
+
+```ts
+// config/permissions.ts
+import { permissive, readOnly, restricted } from 'drizzle-graphql-suite/schema'
+
+export const permissions = {
+  admin: null, // uses full schema
+  maintainer: permissive('maintainer', {
+    audit: false,
+    users: readOnly(),
+  }),
+  user: restricted('user', {
+    posts: { query: true, insert: true },
+    comments: { query: true, insert: true },
+    users: readOnly(),
+  }),
+  anon: restricted('anon'),
+} as const
+```
+
+### 2. Update Server to Select Schema per Request
+
+```ts
+// server.ts
+import { buildSchema } from 'drizzle-graphql-suite/schema'
+import { createYoga } from 'graphql-yoga'
+import { createServer } from 'node:http'
+import { db } from './db'
+import { permissions } from './config/permissions'
+
+const { schema: fullSchema, withPermissions } = buildSchema(db, {
+  suffixes: { list: 's' },
+  tables: { exclude: ['session'] },
+})
+
+// Pre-build schemas for each role (cached by id)
+const schemas = {
+  admin: fullSchema,
+  maintainer: withPermissions(permissions.maintainer),
+  user: withPermissions(permissions.user),
+  anon: withPermissions(permissions.anon),
+}
+
+const yoga = createYoga({
+  schema: async (request) => {
+    const user = await authenticateRequest(request)
+    const role = user?.role ?? 'anon'
+    return schemas[role] ?? schemas.anon
+  },
+  context: async (ctx) => {
+    const user = await authenticateRequest(ctx.request)
+    return { user }
+  },
+})
+
+createServer(yoga).listen(4000)
+```
+
+Schemas are cached by `id` — calling `withPermissions` repeatedly with the same config returns the same instance. You can call `withPermissions` on every request or pre-build as shown above.
+
 ## Codegen Workflow (Separate Repos)
 
 > This section only applies when the client is in a different repository from the server. For same-repo setups, `createDrizzleClient` handles type inference automatically — skip this section.

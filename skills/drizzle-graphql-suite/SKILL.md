@@ -30,6 +30,8 @@ Use this skill when the user is:
 - Adding React data-fetching with TanStack Query for GraphQL
 - Generating GraphQL SDL or static TypeScript types when client and server are in separate repos
 - Configuring hooks, table exclusion, relation depth, or operation filtering
+- Setting up runtime permissions or role-based schema variants
+- Implementing row-level security with WHERE clause injection
 - Working with relation-level filtering (some/every/none quantifiers)
 - Debugging GraphQL schema generation or client type inference
 
@@ -145,13 +147,22 @@ function UserList() {
 
 ```ts
 // Build complete GraphQL schema from Drizzle db instance
-buildSchema(db, config?): { schema: GraphQLSchema; entities: GeneratedEntities }
+buildSchema(db, config?): { schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (p: PermissionConfig) => GraphQLSchema }
 
 // Build entities only (queries, mutations, inputs, types) without full schema
 buildEntities(db, config?): GeneratedEntities
 
 // Build schema from Drizzle exports without a db connection (for codegen only)
-buildSchemaFromDrizzle(drizzleSchema, config?): { schema: GraphQLSchema; entities: GeneratedEntities }
+buildSchemaFromDrizzle(drizzleSchema, config?): { schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (p: PermissionConfig) => GraphQLSchema }
+
+// Permission helpers — build PermissionConfig objects for withPermissions()
+permissive(id, tables?): PermissionConfig             // All tables allowed by default; overrides deny
+restricted(id, tables?): PermissionConfig             // Nothing allowed by default; overrides grant
+readOnly(): TableAccess                               // Shorthand: queries only, no mutations
+
+// Row-level security and hook composition
+withRowSecurity(rules): HooksConfig                   // Generate WHERE-injecting hooks from rules
+mergeHooks(...configs): HooksConfig                   // Deep-merge multiple HooksConfig objects
 
 // Code generation (for separate-repo setups where client can't import Drizzle schema)
 generateSDL(schema): string                          // GraphQL SDL string
@@ -300,6 +311,92 @@ Hooks apply to all 7 operation types: `query`, `querySingle`, `count`, `insert`,
 
 See [patterns/hooks-patterns.md](patterns/hooks-patterns.md) for common recipes.
 
+## Permissions
+
+Build filtered `GraphQLSchema` variants per role or user — introspection fully reflects what each role can see and do.
+
+```ts
+import { buildSchema, permissive, restricted, readOnly } from 'drizzle-graphql-suite/schema'
+
+const { schema, withPermissions } = buildSchema(db)
+
+// Full schema (admin)
+const adminSchema = schema
+
+// Permissive: everything allowed except audit (excluded) and users (read-only)
+const maintainerSchema = withPermissions(
+  permissive('maintainer', { audit: false, users: readOnly() }),
+)
+
+// Restricted: nothing allowed except posts and comments (queries only)
+const userSchema = withPermissions(
+  restricted('user', { posts: { query: true }, comments: { query: true } }),
+)
+
+// Restricted with nothing granted — only Query { _empty: Boolean }
+const anonSchema = withPermissions(restricted('anon'))
+```
+
+### Permission Helpers
+
+| Helper | Description |
+|--------|-------------|
+| `permissive(id, tables?)` | All tables allowed by default; overrides deny |
+| `restricted(id, tables?)` | Nothing allowed by default; overrides grant |
+| `readOnly()` | Shorthand for `{ query: true, insert: false, update: false, delete: false }` |
+
+### `TableAccess`
+
+Each table can be set to `true` (all operations), `false` (excluded entirely), or a `TableAccess` object:
+
+```ts
+type TableAccess = {
+  query?: boolean   // list + single + count
+  insert?: boolean  // insert + insertSingle
+  update?: boolean
+  delete?: boolean
+}
+```
+
+In **permissive** mode, omitted fields default to `true`. In **restricted** mode, omitted fields default to `false`.
+
+### Caching
+
+Schemas are cached by `id` — calling `withPermissions` with the same `id` returns the same `GraphQLSchema` instance.
+
+See [references/permissions.md](references/permissions.md) for full API details and [examples/permissions.md](examples/permissions.md) for multi-role examples.
+
+## Row-Level Security
+
+Generate hooks that inject WHERE clauses for row-level filtering. Compose with other hooks using `mergeHooks`.
+
+```ts
+import { buildSchema, withRowSecurity, mergeHooks } from 'drizzle-graphql-suite/schema'
+
+const { schema } = buildSchema(db, {
+  hooks: mergeHooks(
+    withRowSecurity({
+      posts: (context) => ({ authorId: { eq: context.user.id } }),
+    }),
+    myOtherHooks,
+  ),
+})
+```
+
+### `withRowSecurity(rules)`
+
+Generates a `HooksConfig` with `before` hooks on `query`, `querySingle`, `count`, `update`, and `delete` operations. Each rule is a function that receives the GraphQL context and returns a WHERE filter object.
+
+### `mergeHooks(...configs)`
+
+Deep-merges multiple `HooksConfig` objects:
+
+- **`before` hooks** — chained sequentially; each receives the previous hook's modified args
+- **`after` hooks** — chained sequentially; each receives the previous hook's result
+- **`resolve` hooks** — last one wins (cannot be composed)
+
+See [patterns/hooks-patterns.md](patterns/hooks-patterns.md) for composition recipes.
+
 ## Relation Filtering
 
 Filter across relations using EXISTS subqueries:
@@ -373,6 +470,7 @@ try {
 - [Client API](references/client-api.md) — Client package API, EntityClient methods, error classes
 - [Query API](references/query-api.md) — React hooks API, options, cache invalidation
 - [Configuration](references/configuration.md) — BuildSchemaConfig and ClientSchemaConfig details
+- [Permissions](references/permissions.md) — Permission helpers, withPermissions, TableAccess, RLS, mergeHooks
 - [Type Mapping](references/type-mapping.md) — PostgreSQL column to GraphQL type mapping
 - [Code Generation](references/codegen.md) — SDL/type generation for separate-repo setups
 
@@ -384,8 +482,9 @@ try {
 - [Client Operations](examples/client-basic.md) — All 7 entity operations with createDrizzleClient
 - [React CRUD](examples/react-crud.md) — Full CRUD component using all hooks
 - [Auth Hooks](examples/hooks-auth.md) — Authentication and authorization hook patterns
+- [Permissions](examples/permissions.md) — Multi-role permission setup with RLS
 - [Codegen Script](examples/codegen-script.md) — Generate SDL/types for separate-repo setups
 
 ### Patterns
 - [End-to-End Setup](patterns/end-to-end-setup.md) — Full stack setup guide with config alignment
-- [Hook Recipes](patterns/hooks-patterns.md) — Auth guards, audit logging, data transformation
+- [Hook Recipes](patterns/hooks-patterns.md) — Auth guards, audit logging, hook composition, RLS

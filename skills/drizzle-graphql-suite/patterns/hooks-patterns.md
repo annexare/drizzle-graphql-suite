@@ -248,27 +248,14 @@ const hooks = {
 }
 ```
 
-## Composing Hooks
+## Composing Hooks with `mergeHooks`
 
-Since `HooksConfig` is a plain object, compose multiple configs:
+Use the built-in `mergeHooks` to deep-merge multiple `HooksConfig` objects with proper hook chaining:
 
 ```ts
-function composeHooks(...configs: HooksConfig[]): HooksConfig {
-  const merged: HooksConfig = {}
-  for (const config of configs) {
-    for (const [table, tableHooks] of Object.entries(config)) {
-      if (!merged[table]) {
-        merged[table] = { ...tableHooks }
-      } else {
-        Object.assign(merged[table], tableHooks)
-      }
-    }
-  }
-  return merged
-}
+import { buildSchema, mergeHooks } from 'drizzle-graphql-suite/schema'
 
-// Usage
-const hooks = composeHooks(
+const hooks = mergeHooks(
   authGuard('user'),
   authGuard('post'),
   auditLogHooks,
@@ -278,4 +265,64 @@ const hooks = composeHooks(
 buildSchema(db, { hooks })
 ```
 
-**Note:** When composing, later configs override earlier ones for the same table+operation. Each operation can only have one hook config (before/after or resolve). If you need to chain multiple before hooks for the same operation, combine them into a single before function.
+**Merge behavior:**
+- `before` hooks on the same table+operation are **chained** — each receives the previous hook's modified args
+- `after` hooks on the same table+operation are **chained** — each receives the previous hook's result
+- `resolve` hooks — last one wins (cannot be composed)
+- `undefined` values are skipped, enabling conditional composition:
+
+```ts
+const hooks = mergeHooks(
+  baseHooks,
+  isProduction ? auditHooks : undefined,
+  rlsHooks,
+)
+```
+
+## Row-Level Security
+
+Use `withRowSecurity` to generate hooks that inject WHERE clauses for row-level filtering:
+
+```ts
+import { buildSchema, withRowSecurity, mergeHooks } from 'drizzle-graphql-suite/schema'
+
+const rlsHooks = withRowSecurity({
+  posts: (context) => ({ authorId: { eq: context.user.id } }),
+  comments: (context) => ({ userId: { eq: context.user.id } }),
+})
+
+const { schema } = buildSchema(db, { hooks: rlsHooks })
+```
+
+Rules apply `before` hooks on `query`, `querySingle`, `count`, `update`, and `delete` operations. Insert operations are not filtered (they create new rows, not read existing ones).
+
+## Combined RLS + Auth
+
+Compose row-level security with authentication hooks:
+
+```ts
+import { buildSchema, withRowSecurity, mergeHooks } from 'drizzle-graphql-suite/schema'
+
+const rlsHooks = withRowSecurity({
+  posts: (context) => ({ authorId: { eq: context.user.id } }),
+})
+
+const authHooks = {
+  posts: {
+    insert: {
+      before: async ({ args, context }: { args: any; context: any }) => {
+        if (!context.user) throw new Error('Unauthorized')
+        args.values = args.values.map((v: Record<string, unknown>) => ({
+          ...v,
+          authorId: context.user.id,
+        }))
+        return { args }
+      },
+    },
+  },
+}
+
+// RLS filters run first (WHERE injection), then auth hooks chain after
+const { schema } = buildSchema(db, {
+  hooks: mergeHooks(rlsHooks, authHooks),
+})

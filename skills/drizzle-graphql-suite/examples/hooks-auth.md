@@ -4,6 +4,7 @@ Hook patterns for authentication, authorization, and data transformation.
 
 ```ts
 import type { BuildSchemaConfig, HooksConfig } from 'drizzle-graphql-suite/schema'
+import { mergeHooks } from 'drizzle-graphql-suite/schema'
 
 // ─── Auth Guard Hook ─────────────────────────────────────────
 // Block unauthenticated access to all operations on a table.
@@ -129,24 +130,9 @@ const customResolverHooks: HooksConfig = {
 }
 
 // ─── Composing Multiple Hook Configs ─────────────────────────
-// Since HooksConfig is a plain object, merge with spread or Object.assign.
+// Use the built-in mergeHooks to deep-merge with proper before/after chaining.
 
-function composeHooks(...configs: HooksConfig[]): HooksConfig {
-  const merged: HooksConfig = {}
-  for (const config of configs) {
-    for (const [table, tableHooks] of Object.entries(config)) {
-      if (!merged[table]) {
-        merged[table] = { ...tableHooks }
-      } else {
-        Object.assign(merged[table], tableHooks)
-      }
-    }
-  }
-  return merged
-}
-
-// Usage: compose all hook configs
-const allHooks = composeHooks(authGuardHooks, autoAuthorHooks, auditLogHooks, customResolverHooks)
+const allHooks = mergeHooks(authGuardHooks, autoAuthorHooks, auditLogHooks, customResolverHooks)
 
 // ─── Full Schema Config ──────────────────────────────────────
 
@@ -155,4 +141,67 @@ const config: BuildSchemaConfig = {
   tables: { exclude: ['session'] },
   hooks: allHooks,
 }
+```
+
+## Permissions-Based Auth
+
+Use `withPermissions` for role-based schema selection instead of (or alongside) hooks:
+
+```ts
+import {
+  buildSchema,
+  permissive,
+  readOnly,
+  restricted,
+} from 'drizzle-graphql-suite/schema'
+
+const { schema: adminSchema, withPermissions } = buildSchema(db, {
+  suffixes: { list: 's' },
+  tables: { exclude: ['session'] },
+})
+
+// Each role gets a different schema — introspection reflects actual access
+const schemas = {
+  admin: adminSchema,
+  maintainer: withPermissions(permissive('maintainer', { audit: false, users: readOnly() })),
+  user: withPermissions(restricted('user', { posts: { query: true }, users: readOnly() })),
+  anon: withPermissions(restricted('anon')),
+}
+
+// In your server, select schema per request:
+// schema: (request) => schemas[getUserRole(request)]
+```
+
+## Row-Level Security + Auth Hooks
+
+Combine `withRowSecurity` and auth hooks using `mergeHooks`:
+
+```ts
+import {
+  buildSchema,
+  mergeHooks,
+  withRowSecurity,
+} from 'drizzle-graphql-suite/schema'
+
+const rlsHooks = withRowSecurity({
+  posts: (context) => ({ authorId: { eq: context.user.id } }),
+})
+
+const autoAuthor = {
+  posts: {
+    insert: {
+      before: async ({ args, context }: { args: any; context: any }) => {
+        args.values = args.values.map((v: Record<string, unknown>) => ({
+          ...v,
+          authorId: context.user.id,
+        }))
+        return { args }
+      },
+    },
+  },
+}
+
+const { schema } = buildSchema(db, {
+  hooks: mergeHooks(rlsHooks, autoAuthor),
+})
 ```

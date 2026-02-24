@@ -137,6 +137,62 @@ const client = createDrizzleClient({
 
 Fields that only exist on the server config (`limitRelationDepth`, `limitSelfRelationDepth`, `hooks`, `tables.config`, `debug`) do not need to be specified on the client.
 
+## `PermissionConfig`
+
+Used by `withPermissions()` (returned from `buildSchema` and `buildSchemaFromDrizzle`).
+
+```ts
+type PermissionConfig = {
+  id: string
+  mode: 'permissive' | 'restricted'
+  tables?: Record<string, boolean | TableAccess>
+}
+```
+
+### Fields
+
+#### `id`
+- **Type:** `string`
+- **Description:** Unique identifier for caching. Calling `withPermissions` with the same `id` returns the same `GraphQLSchema` instance.
+
+#### `mode`
+- **Type:** `'permissive' | 'restricted'`
+- **Description:** Controls default access for tables not listed in `tables`.
+  - `'permissive'`: All tables allowed by default. Entries in `tables` deny or restrict access.
+  - `'restricted'`: Nothing allowed by default. Entries in `tables` grant access.
+
+#### `tables`
+- **Type:** `Record<string, boolean | TableAccess>`
+- **Description:** Per-table access overrides. Each entry can be:
+  - `true` — all operations allowed
+  - `false` — table excluded entirely (no types, no operations, no relation fields)
+  - `TableAccess` — granular operation control
+
+## `TableAccess`
+
+Granular per-table operation control used in `PermissionConfig.tables`.
+
+```ts
+type TableAccess = {
+  query?: boolean   // list + single + count
+  insert?: boolean  // insert + insertSingle
+  update?: boolean
+  delete?: boolean
+}
+```
+
+In **permissive** mode, omitted fields default to `true`. In **restricted** mode, omitted fields default to `false`.
+
+### Relationship to `BuildSchemaConfig`
+
+Internally, `withPermissions()` converts a `PermissionConfig` into `BuildSchemaConfig` overrides:
+
+- Tables set to `false` are added to `tables.exclude`
+- Tables with `readOnly()` get `{ queries: true, mutations: false }` in `tables.config`
+- Granular access (e.g., `{ query: true, insert: true, delete: false }`) uses `tables.config` for queries/mutations control, with individual mutation entry points (`insertInto*`, `update*`, `deleteFrom*`) post-filtered after schema build
+
+This means permissions compose on top of the base config — a table already excluded in the base config stays excluded regardless of permission settings.
+
 ## `CodegenOptions`
 
 Used by `generateTypes()` and `generateEntityDefs()`.
