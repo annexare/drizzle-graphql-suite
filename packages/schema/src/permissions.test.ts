@@ -261,6 +261,25 @@ describe('caching', () => {
     const b = withPermissions(restricted('role-b', { users: true }))
     expect(a).not.toBe(b)
   })
+
+  test('clearPermissionCache(id) evicts a single entry', () => {
+    const { withPermissions, clearPermissionCache } = buildWithPermissions()
+    const a = withPermissions(restricted('evict-one', { posts: true }))
+    clearPermissionCache('evict-one')
+    const b = withPermissions(restricted('evict-one', { posts: true }))
+    expect(a).not.toBe(b)
+  })
+
+  test('clearPermissionCache() evicts all entries', () => {
+    const { withPermissions, clearPermissionCache } = buildWithPermissions()
+    const a = withPermissions(restricted('clear-a', { posts: true }))
+    const b = withPermissions(restricted('clear-b', { users: true }))
+    clearPermissionCache()
+    const a2 = withPermissions(restricted('clear-a', { posts: true }))
+    const b2 = withPermissions(restricted('clear-b', { users: true }))
+    expect(a).not.toBe(a2)
+    expect(b).not.toBe(b2)
+  })
 })
 
 describe('edge cases', () => {

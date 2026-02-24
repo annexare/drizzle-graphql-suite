@@ -15,6 +15,7 @@ export const buildSchema = (
   schema: GraphQLSchema
   entities: GeneratedEntities
   withPermissions: (permissions: PermissionConfig) => GraphQLSchema
+  clearPermissionCache: (id?: string) => void
 } => {
   const builder = new SchemaBuilder(db, config)
   return builder.build()
@@ -45,6 +46,7 @@ export const buildSchemaFromDrizzle = (
   schema: GraphQLSchema
   entities: GeneratedEntities
   withPermissions: (permissions: PermissionConfig) => GraphQLSchema
+  clearPermissionCache: (id?: string) => void
 } => {
   const { tables, tableNamesMap } = extractTablesRelationalConfig(
     drizzleSchema,
