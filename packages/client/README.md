@@ -46,9 +46,9 @@ const client = createDrizzleClient({
 })
 ```
 
-### From Schema Descriptor
+### From Schema Descriptor (separate-repo setups)
 
-Use `createClient` with a codegen-generated schema descriptor when you want to decouple from the Drizzle schema at runtime (e.g., in a frontend bundle that shouldn't import server-side schema files).
+Use `createClient` with a codegen-generated schema descriptor when the client is in a separate repository that can't import the Drizzle schema directly.
 
 ```ts
 import { createClient } from 'drizzle-graphql-suite/client'
