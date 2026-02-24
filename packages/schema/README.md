@@ -321,6 +321,8 @@ query {
 
 ## Code Generation
 
+> **When to use:** Only when the client is in a separate repository that cannot import the Drizzle schema directly. For same-repo setups, [`createDrizzleClient`](../client/README.md) infers all types automatically — no codegen needed.
+
 Three code generation functions for producing static artifacts from a GraphQL schema:
 
 ### `generateSDL(schema)`
@@ -354,7 +356,7 @@ writeFileSync('generated/types.ts', types)
 
 ### `generateEntityDefs(schema, options?)`
 
-Generates a runtime schema descriptor object and `EntityDefs` type for the client package. This is an alternative to `createDrizzleClient` — useful when you want to ship pre-built schema metadata.
+Generates a runtime schema descriptor object and `EntityDefs` type for the client package. Use this instead of `createDrizzleClient` when the client is in a separate repo and can't import the Drizzle schema.
 
 ```ts
 import { generateEntityDefs } from 'drizzle-graphql-suite/schema'
