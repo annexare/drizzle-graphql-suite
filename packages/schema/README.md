@@ -32,6 +32,8 @@ Inspired by [`drizzle-graphql`](https://github.com/drizzle-team/drizzle-graphql)
 - **Small generated schema** — the generated schema stays compact even when supporting self-relations and deeply nested relations, thanks to configurable depth limiting (`limitRelationDepth`, `limitSelfRelationDepth`), per-relation pruning (`pruneRelations`), and per-table control (`tables.exclude`, per-table `queries`/`mutations` toggles) — up to 90% schema size reduction when tuned
 - **Native PostgreSQL JSON/JSONB support** — `json` and `jsonb` columns map to a custom `JSON` GraphQL scalar, so structured data passes through without manual type wiring
 - **Relation-level filtering** with EXISTS subqueries (`some`/`every`/`none` quantifiers)
+- **Runtime permissions** — `withPermissions()` builds filtered schemas per role, fully reflected in introspection
+- **Row-level security helpers** — `withRowSecurity()` + `mergeHooks()` for composable auth
 - **Per-operation hooks system** (before/after/resolve) for auth, audit, and custom logic
 - **Count queries** with full filter support
 - **`buildEntities()`** for composable schema building (avoids redundant schema validation)
@@ -47,20 +49,22 @@ Inspired by [`drizzle-graphql`](https://github.com/drizzle-team/drizzle-graphql)
 
 ### `buildSchema(db, config?)`
 
-Builds a complete `GraphQLSchema` with all CRUD operations from a Drizzle database instance. Returns `{ schema, entities }`.
+Builds a complete `GraphQLSchema` with all CRUD operations from a Drizzle database instance. Returns `{ schema, entities, withPermissions }`.
 
 ```ts
 import { buildSchema } from 'drizzle-graphql-suite/schema'
 import { createYoga } from 'graphql-yoga'
 import { db } from './db'
 
-const { schema, entities } = buildSchema(db, {
+const { schema, entities, withPermissions } = buildSchema(db, {
   limitRelationDepth: 3,
   tables: { exclude: ['session'] },
 })
 
 const yoga = createYoga({ schema })
 ```
+
+See [Runtime Permissions](#runtime-permissions) for `withPermissions` usage.
 
 #### Framework Integration
 
@@ -199,6 +203,92 @@ Enable diagnostic logging for schema size and relation tree.
 
 - **Type**: `boolean | { schemaSize?: boolean; relationTree?: boolean }`
 - **Default**: `undefined`
+
+## Runtime Permissions
+
+Build filtered `GraphQLSchema` variants per role or user — introspection fully reflects what each role can see and do.
+
+```ts
+import { buildSchema, permissive, restricted, readOnly } from 'drizzle-graphql-suite/schema'
+
+const { schema, withPermissions } = buildSchema(db)
+
+// Full schema (admin)
+const adminSchema = schema
+
+// Permissive: everything allowed except audit (excluded) and users (read-only)
+const maintainerSchema = withPermissions(
+  permissive('maintainer', { audit: false, users: readOnly() }),
+)
+
+// Restricted: nothing allowed except posts and comments (queries only)
+const userSchema = withPermissions(
+  restricted('user', { posts: { query: true }, comments: { query: true } }),
+)
+
+// Restricted with nothing granted — only Query { _empty: Boolean }
+const anonSchema = withPermissions(restricted('anon'))
+```
+
+Schemas are cached by `id` — calling `withPermissions` with the same `id` returns the same `GraphQLSchema` instance.
+
+### Permission Helpers
+
+| Helper | Description |
+|--------|-------------|
+| `permissive(id, tables?)` | All tables allowed by default; overrides deny |
+| `restricted(id, tables?)` | Nothing allowed by default; overrides grant |
+| `readOnly()` | Shorthand for `{ query: true, insert: false, update: false, delete: false }` |
+
+### Table Access
+
+Each table can be set to `true` (all operations), `false` (excluded entirely), or a `TableAccess` object:
+
+```ts
+type TableAccess = {
+  query?: boolean   // list + single + count
+  insert?: boolean  // insert + insertSingle
+  update?: boolean
+  delete?: boolean
+}
+```
+
+In **permissive** mode, omitted fields default to `true`. In **restricted** mode, omitted fields default to `false`.
+
+### Introspection Behavior
+
+- `false` (excluded table) — removed from everywhere: no entry points, no relation fields on other types, no filter fields
+- `readOnly()` — table types exist (accessible via relations), but only query entry points; no mutations
+- Granular control — e.g. `{ query: true, insert: true, delete: false }` removes only `deleteFrom{Table}` mutation
+
+## Row-Level Security
+
+Generate hooks that inject WHERE clauses for row-level filtering. Compose with other hooks using `mergeHooks`.
+
+```ts
+import { buildSchema, withRowSecurity, mergeHooks } from 'drizzle-graphql-suite/schema'
+
+const { schema } = buildSchema(db, {
+  hooks: mergeHooks(
+    withRowSecurity({
+      posts: (context) => ({ authorId: { eq: context.user.id } }),
+    }),
+    myOtherHooks,
+  ),
+})
+```
+
+### `withRowSecurity(rules)`
+
+Generates a `HooksConfig` with `before` hooks on `query`, `querySingle`, `count`, `update`, and `delete` operations. Each rule is a function that receives the GraphQL context and returns a WHERE filter object.
+
+### `mergeHooks(...configs)`
+
+Deep-merges multiple `HooksConfig` objects:
+
+- **`before` hooks** — chained sequentially; each receives the previous hook's modified args
+- **`after` hooks** — chained sequentially; each receives the previous hook's result
+- **`resolve` hooks** — last one wins (cannot be composed)
 
 ## Hooks System
 

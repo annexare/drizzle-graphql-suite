@@ -68,12 +68,14 @@ import {
   type TableNamedRelations,
 } from './data-mappers'
 import { type ConvertedColumn, drizzleColumnToGraphQLType } from './graphql/type-builder'
+import { mergePermissionsIntoConfig, postFilterMutations } from './permissions'
 import type {
   BeforeHookResult,
   BuildSchemaConfig,
   GeneratedEntities,
   HooksConfig,
   OperationType,
+  PermissionConfig,
   RelationPruneRule,
   ResolveHookFn,
   TableHookConfig,
@@ -132,6 +134,7 @@ export class SchemaBuilder {
   private suffixes: { list: string; single: string }
   private limitRelationDepth: number | undefined
   private limitSelfRelationDepth: number
+  private allTableNames: string[]
   private excludedTables: Set<string>
   private tableOperations: Record<string, TableOperations>
   private pruneRelations: Map<string, RelationPruneRule>
@@ -217,6 +220,7 @@ export class SchemaBuilder {
     })
 
     this.tables = this.extractTables(schema)
+    this.allTableNames = Object.keys(this.tables)
 
     // Apply table exclusions before building relation map
     this.excludedTables = new Set(config?.tables?.exclude ?? [])
@@ -329,7 +333,11 @@ export class SchemaBuilder {
     return { queries, mutations, inputs, types: outputs }
   }
 
-  build(): { schema: GraphQLSchema; entities: GeneratedEntities } {
+  build(): {
+    schema: GraphQLSchema
+    entities: GeneratedEntities
+    withPermissions: (permissions: PermissionConfig) => GraphQLSchema
+  } {
     const entities = this.buildEntities()
     const { queries, mutations, inputs, types: outputs } = entities
 
@@ -354,7 +362,74 @@ export class SchemaBuilder {
     const schema = new GraphQLSchema(graphQLSchemaConfig)
     this.logDebugInfo(schema)
 
-    return { schema, entities }
+    const cache = new Map<string, GraphQLSchema>()
+    const db = this.db
+    const baseConfig = this.config
+    const allTableNames = this.allTableNames
+
+    const withPermissions = (permissions: PermissionConfig): GraphQLSchema => {
+      const cached = cache.get(permissions.id)
+      if (cached) return cached
+
+      const { config: mergedConfig, mutationFilter } = mergePermissionsIntoConfig(
+        baseConfig,
+        permissions,
+        allTableNames,
+      )
+
+      // Check if all tables are excluded (restricted with nothing granted)
+      const excludedSet = new Set(mergedConfig.tables?.exclude ?? [])
+      const hasAnyTable = allTableNames.some((t) => !excludedSet.has(t))
+
+      if (!hasAnyTable) {
+        // Empty schema — only _empty: Boolean query field
+        const emptySchema = new GraphQLSchema({
+          query: new GraphQLObjectType({
+            name: 'Query',
+            fields: {
+              _empty: { type: GraphQLBoolean },
+            },
+          }),
+        })
+        cache.set(permissions.id, emptySchema)
+        return emptySchema
+      }
+
+      const permBuilder = new SchemaBuilder(db, mergedConfig)
+      const permEntities = permBuilder.buildEntities()
+
+      // Post-filter individual mutation entry points
+      if (Object.keys(mutationFilter).length) {
+        postFilterMutations(permEntities.mutations, mutationFilter)
+      }
+
+      // Build the schema from filtered entities
+      const permSchemaConfig: GraphQLSchemaConfig = {
+        types: [...Object.values(permEntities.inputs), ...Object.values(permEntities.types)] as (
+          | GraphQLInputObjectType
+          | GraphQLObjectType
+        )[],
+        query: new GraphQLObjectType({
+          name: 'Query',
+          fields: Object.keys(permEntities.queries).length
+            ? permEntities.queries
+            : { _empty: { type: GraphQLBoolean } },
+        }),
+      }
+
+      if (mergedConfig.mutations !== false && Object.keys(permEntities.mutations).length) {
+        permSchemaConfig.mutation = new GraphQLObjectType({
+          name: 'Mutation',
+          fields: permEntities.mutations,
+        })
+      }
+
+      const permSchema = new GraphQLSchema(permSchemaConfig)
+      cache.set(permissions.id, permSchema)
+      return permSchema
+    }
+
+    return { schema, entities, withPermissions }
   }
 
   private logDebugInfo(schema: GraphQLSchema): void {

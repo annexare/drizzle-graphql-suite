@@ -3,7 +3,7 @@ import type { PgDatabase } from 'drizzle-orm/pg-core'
 import type { GraphQLSchema } from 'graphql'
 
 import { SchemaBuilder } from './schema-builder'
-import type { BuildSchemaConfig, GeneratedEntities } from './types'
+import type { BuildSchemaConfig, GeneratedEntities, PermissionConfig } from './types'
 
 export { GraphQLJSON } from './graphql/scalars'
 
@@ -11,7 +11,11 @@ export const buildSchema = (
   // biome-ignore lint/suspicious/noExplicitAny: Drizzle generic parameters
   db: PgDatabase<any, any, any>,
   config?: BuildSchemaConfig,
-): { schema: GraphQLSchema; entities: GeneratedEntities } => {
+): {
+  schema: GraphQLSchema
+  entities: GeneratedEntities
+  withPermissions: (permissions: PermissionConfig) => GraphQLSchema
+} => {
   const builder = new SchemaBuilder(db, config)
   return builder.build()
 }
@@ -37,7 +41,11 @@ export const buildEntities = (
 export const buildSchemaFromDrizzle = (
   drizzleSchema: Record<string, unknown>,
   config?: BuildSchemaConfig,
-): { schema: GraphQLSchema; entities: GeneratedEntities } => {
+): {
+  schema: GraphQLSchema
+  entities: GeneratedEntities
+  withPermissions: (permissions: PermissionConfig) => GraphQLSchema
+} => {
   const { tables, tableNamesMap } = extractTablesRelationalConfig(
     drizzleSchema,
     createTableRelationsHelpers,
@@ -68,5 +76,7 @@ export const buildSchemaFromDrizzle = (
 
 export type { CodegenOptions } from './codegen'
 export { generateEntityDefs, generateSDL, generateTypes } from './codegen'
+export { permissive, readOnly, restricted } from './permissions'
+export { mergeHooks, withRowSecurity } from './row-security'
 export { SchemaBuilder } from './schema-builder'
 export * from './types'

@@ -84,6 +84,21 @@ export type HooksConfig = {
   [tableName: string]: TableHookConfig
 }
 
+// ─── Permission Types ───────────────────────────────────────
+
+export type TableAccess = {
+  query?: boolean
+  insert?: boolean
+  update?: boolean
+  delete?: boolean
+}
+
+export type PermissionConfig = {
+  id: string
+  mode: 'permissive' | 'restricted'
+  tables?: Record<string, boolean | TableAccess>
+}
+
 // ─── Table Config Types ─────────────────────────────────────
 
 export type TableOperations = {
