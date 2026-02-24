@@ -28,6 +28,7 @@ export function withRowSecurity(rules: Record<string, RowSecurityRule>): HooksCo
     const before: BeforeHookFn = (ctx) => {
       const whereClause = rule(ctx.context)
       const existingWhere = ctx.args?.where
+      // Security rules override user-supplied filters on conflicting keys
       const mergedWhere = existingWhere ? { ...existingWhere, ...whereClause } : whereClause
       return { args: { ...ctx.args, where: mergedWhere } }
     }

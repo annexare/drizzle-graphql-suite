@@ -67,6 +67,26 @@ describe('withRowSecurity', () => {
     })
     expect(result?.args?.limit).toBe(5)
   })
+
+  test('security rule overrides user-supplied WHERE on same field', async () => {
+    const hooks = withRowSecurity({
+      posts: (ctx) => ({ authorId: { eq: ctx.userId } }),
+    })
+
+    const queryHook = hooks.posts?.query
+    if (!queryHook || !('before' in queryHook) || !queryHook.before) return
+
+    const result = await queryHook.before({
+      args: { where: { authorId: { eq: 'attacker-id' } } },
+      context: { userId: 'real-owner' },
+      info: mockInfo,
+    })
+
+    // The security rule must win over the user-supplied value
+    expect(result?.args?.where).toEqual({
+      authorId: { eq: 'real-owner' },
+    })
+  })
 })
 
 // ─── mergeHooks ──────────────────────────────────────────────
@@ -174,6 +194,60 @@ describe('mergeHooks', () => {
     const bQuery = hooksB.posts?.query
     if (!bQuery || !('resolve' in bQuery)) return
     expect(hook.resolve).toBe(bQuery.resolve)
+  })
+
+  test('resolve hook (first) replaced by before/after hooks (second)', () => {
+    const hooksA: HooksConfig = {
+      posts: {
+        query: {
+          resolve: async () => 'custom',
+        },
+      },
+    }
+
+    const hooksB: HooksConfig = {
+      posts: {
+        query: {
+          before: async () => ({ args: { replaced: true } }),
+          after: async (ctx) => ctx.result,
+        },
+      },
+    }
+
+    const merged = mergeHooks(hooksA, hooksB)
+    const hook = merged.posts?.query
+    expect(hook).toBeDefined()
+    // before/after should replace resolve entirely
+    expect(hook && 'resolve' in hook).toBe(false)
+    expect(hook && 'before' in hook).toBe(true)
+    expect(hook && 'after' in hook).toBe(true)
+  })
+
+  test('before/after hooks (first) replaced by resolve hook (second)', () => {
+    const hooksA: HooksConfig = {
+      posts: {
+        query: {
+          before: async () => ({ args: { original: true } }),
+          after: async (ctx) => ctx.result,
+        },
+      },
+    }
+
+    const hooksB: HooksConfig = {
+      posts: {
+        query: {
+          resolve: async () => 'overridden',
+        },
+      },
+    }
+
+    const merged = mergeHooks(hooksA, hooksB)
+    const hook = merged.posts?.query
+    expect(hook).toBeDefined()
+    // resolve should replace before/after entirely
+    expect(hook && 'resolve' in hook).toBe(true)
+    expect(hook && 'before' in hook).toBe(false)
+    expect(hook && 'after' in hook).toBe(false)
   })
 
   test('handles undefined configs', () => {
