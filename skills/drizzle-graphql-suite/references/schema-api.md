@@ -11,7 +11,7 @@ Build a complete GraphQL schema with queries and mutations from a Drizzle databa
 ```ts
 import { buildSchema } from 'drizzle-graphql-suite/schema'
 
-const { schema, entities } = buildSchema(db, {
+const { schema, entities, withPermissions } = buildSchema(db, {
   tables: { exclude: ['session'] },
   limitRelationDepth: 3,
 })
@@ -21,7 +21,7 @@ const { schema, entities } = buildSchema(db, {
 - `db: PgDatabase` — Drizzle PostgreSQL database instance (must have `db._.fullSchema`)
 - `config?: BuildSchemaConfig` — Optional configuration
 
-**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities }`
+**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (permissions: PermissionConfig) => GraphQLSchema }`
 
 **Requirements:** Drizzle ORM v0.30.9+ (needs `db._.fullSchema`)
 
@@ -47,14 +47,14 @@ Build a schema directly from Drizzle schema exports without a database connectio
 import { buildSchemaFromDrizzle } from 'drizzle-graphql-suite/schema'
 import * as schema from './db/schema'
 
-const { schema: gqlSchema } = buildSchemaFromDrizzle(schema)
+const { schema: gqlSchema, withPermissions } = buildSchemaFromDrizzle(schema)
 ```
 
 **Parameters:**
 - `drizzleSchema: Record<string, unknown>` — Drizzle schema module exports (tables + relations)
 - `config?: BuildSchemaConfig` — Optional configuration
 
-**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities }`
+**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (permissions: PermissionConfig) => GraphQLSchema }`
 
 ## Types
 
@@ -157,6 +157,116 @@ type RelationPruneRule =
   | { only: string[] } // Expand with only listed child relation fields
 ```
 
+### `permissive(id, tables?)`
+
+Create a permissive permission config — all tables allowed by default; overrides deny.
+
+```ts
+import { permissive, readOnly } from 'drizzle-graphql-suite/schema'
+
+const config = permissive('maintainer', {
+  audit: false,          // exclude entirely
+  users: readOnly(),     // queries only
+})
+```
+
+**Parameters:**
+- `id: string` — Unique identifier for caching
+- `tables?: Record<string, boolean | TableAccess>` — Per-table overrides
+
+**Returns:** `PermissionConfig`
+
+### `restricted(id, tables?)`
+
+Create a restricted permission config — nothing allowed by default; overrides grant.
+
+```ts
+import { restricted } from 'drizzle-graphql-suite/schema'
+
+const config = restricted('user', {
+  posts: { query: true },
+  comments: { query: true },
+})
+```
+
+**Parameters:**
+- `id: string` — Unique identifier for caching
+- `tables?: Record<string, boolean | TableAccess>` — Per-table overrides
+
+**Returns:** `PermissionConfig`
+
+### `readOnly()`
+
+Create a `TableAccess` shorthand that allows queries only.
+
+```ts
+import { readOnly } from 'drizzle-graphql-suite/schema'
+
+readOnly() // => { query: true, insert: false, update: false, delete: false }
+```
+
+**Returns:** `TableAccess`
+
+### `withRowSecurity(rules)`
+
+Generate a `HooksConfig` that injects WHERE clauses from row-level security rules. Rules are applied as `before` hooks on `query`, `querySingle`, `count`, `update`, and `delete` operations.
+
+```ts
+import { withRowSecurity } from 'drizzle-graphql-suite/schema'
+
+const hooks = withRowSecurity({
+  posts: (context) => ({ authorId: { eq: context.user.id } }),
+})
+```
+
+**Parameters:**
+- `rules: Record<string, (context: any) => Record<string, unknown>>` — Per-table rule functions
+
+**Returns:** `HooksConfig`
+
+### `mergeHooks(...configs)`
+
+Deep-merge multiple `HooksConfig` objects with proper hook chaining.
+
+```ts
+import { mergeHooks, withRowSecurity } from 'drizzle-graphql-suite/schema'
+
+const hooks = mergeHooks(withRowSecurity(rules), authHooks, auditHooks)
+```
+
+**Parameters:**
+- `...configs: (HooksConfig | undefined)[]` — Hook configs to merge (undefined values are skipped)
+
+**Returns:** `HooksConfig`
+
+**Merge behavior:**
+- `before` hooks — chained sequentially; each receives the previous hook's modified args
+- `after` hooks — chained sequentially; each receives the previous hook's result
+- `resolve` hooks — last one wins (cannot be composed)
+
+## Types
+
+### `PermissionConfig`
+
+```ts
+type PermissionConfig = {
+  id: string                                    // Unique ID for caching
+  mode: 'permissive' | 'restricted'             // Default access mode
+  tables?: Record<string, boolean | TableAccess> // Per-table overrides
+}
+```
+
+### `TableAccess`
+
+```ts
+type TableAccess = {
+  query?: boolean   // list + single + count
+  insert?: boolean  // insert + insertSingle
+  update?: boolean
+  delete?: boolean
+}
+```
+
 ## Custom Scalar
 
 ### `GraphQLJSON`
@@ -175,7 +285,7 @@ The `SchemaBuilder` class is exported for advanced use cases. Usually you'll use
 import { SchemaBuilder } from 'drizzle-graphql-suite/schema'
 
 const builder = new SchemaBuilder(db, config)
-const { schema, entities } = builder.build()
+const { schema, entities, withPermissions } = builder.build()
 // or
 const entities = builder.buildEntities()
 ```
@@ -253,3 +363,5 @@ catch (e: unknown) {
 - `packages/schema/src/graphql/scalars.ts` — GraphQLJSON scalar
 - `packages/schema/src/data-mappers.ts` — Data transformation between Drizzle and GraphQL
 - `packages/schema/src/case-ops.ts` — String case utilities
+- `packages/schema/src/permissions.ts` — Permission helpers and config merging
+- `packages/schema/src/row-security.ts` — `withRowSecurity()` and `mergeHooks()`
