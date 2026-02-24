@@ -80,7 +80,6 @@ const schemas = {
   viewer: withPermissions(restricted('viewer', { post: { query: true } })),
 }
 ```
-```
 
 ### 2. Client — Type-Safe Queries
 

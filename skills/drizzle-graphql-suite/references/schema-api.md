@@ -11,7 +11,7 @@ Build a complete GraphQL schema with queries and mutations from a Drizzle databa
 ```ts
 import { buildSchema } from 'drizzle-graphql-suite/schema'
 
-const { schema, entities, withPermissions } = buildSchema(db, {
+const { schema, entities, withPermissions, clearPermissionCache } = buildSchema(db, {
   tables: { exclude: ['session'] },
   limitRelationDepth: 3,
 })
@@ -21,7 +21,7 @@ const { schema, entities, withPermissions } = buildSchema(db, {
 - `db: PgDatabase` — Drizzle PostgreSQL database instance (must have `db._.fullSchema`)
 - `config?: BuildSchemaConfig` — Optional configuration
 
-**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (permissions: PermissionConfig) => GraphQLSchema }`
+**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (permissions: PermissionConfig) => GraphQLSchema; clearPermissionCache: (id?: string) => void }`
 
 **Requirements:** Drizzle ORM v0.30.9+ (needs `db._.fullSchema`)
 
@@ -47,14 +47,14 @@ Build a schema directly from Drizzle schema exports without a database connectio
 import { buildSchemaFromDrizzle } from 'drizzle-graphql-suite/schema'
 import * as schema from './db/schema'
 
-const { schema: gqlSchema, withPermissions } = buildSchemaFromDrizzle(schema)
+const { schema: gqlSchema, withPermissions, clearPermissionCache } = buildSchemaFromDrizzle(schema)
 ```
 
 **Parameters:**
 - `drizzleSchema: Record<string, unknown>` — Drizzle schema module exports (tables + relations)
 - `config?: BuildSchemaConfig` — Optional configuration
 
-**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (permissions: PermissionConfig) => GraphQLSchema }`
+**Returns:** `{ schema: GraphQLSchema; entities: GeneratedEntities; withPermissions: (permissions: PermissionConfig) => GraphQLSchema; clearPermissionCache: (id?: string) => void }`
 
 ## Types
 
@@ -207,6 +207,27 @@ readOnly() // => { query: true, insert: false, update: false, delete: false }
 
 **Returns:** `TableAccess`
 
+### `clearPermissionCache(id?)`
+
+Evict cached permission schemas. Returned alongside `withPermissions` from `buildSchema()` / `buildSchemaFromDrizzle()`.
+
+```ts
+const { withPermissions, clearPermissionCache } = buildSchema(db, config)
+
+// Clear all cached permission schemas
+clearPermissionCache()
+
+// Clear a specific cached entry
+clearPermissionCache('user-123')
+```
+
+**Parameters:**
+- `id?: string` — If provided, removes only that entry; otherwise clears the entire cache
+
+**Returns:** `void`
+
+> **Note:** When `withPermissions` IDs come from per-user data (e.g., user IDs), the cache can grow without bound. Use `clearPermissionCache` to manage cache size — for example, evict a user's entry on logout or periodically clear the full cache.
+
 ### `withRowSecurity(rules)`
 
 Generate a `HooksConfig` that injects WHERE clauses from row-level security rules. Rules are applied as `before` hooks on `query`, `querySingle`, `count`, `update`, and `delete` operations.
@@ -244,29 +265,6 @@ const hooks = mergeHooks(withRowSecurity(rules), authHooks, auditHooks)
 - `after` hooks — chained sequentially; each receives the previous hook's result
 - `resolve` hooks — last one wins (cannot be composed)
 
-## Types
-
-### `PermissionConfig`
-
-```ts
-type PermissionConfig = {
-  id: string                                    // Unique ID for caching
-  mode: 'permissive' | 'restricted'             // Default access mode
-  tables?: Record<string, boolean | TableAccess> // Per-table overrides
-}
-```
-
-### `TableAccess`
-
-```ts
-type TableAccess = {
-  query?: boolean   // list + single + count
-  insert?: boolean  // insert + insertSingle
-  update?: boolean
-  delete?: boolean
-}
-```
-
 ## Custom Scalar
 
 ### `GraphQLJSON`
@@ -285,7 +283,7 @@ The `SchemaBuilder` class is exported for advanced use cases. Usually you'll use
 import { SchemaBuilder } from 'drizzle-graphql-suite/schema'
 
 const builder = new SchemaBuilder(db, config)
-const { schema, entities, withPermissions } = builder.build()
+const { schema, entities, withPermissions, clearPermissionCache } = builder.build()
 // or
 const entities = builder.buildEntities()
 ```

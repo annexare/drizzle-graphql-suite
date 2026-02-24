@@ -337,6 +337,7 @@ export class SchemaBuilder {
     schema: GraphQLSchema
     entities: GeneratedEntities
     withPermissions: (permissions: PermissionConfig) => GraphQLSchema
+    clearPermissionCache: (id?: string) => void
   } {
     const entities = this.buildEntities()
     const { queries, mutations, inputs, types: outputs } = entities
@@ -429,7 +430,12 @@ export class SchemaBuilder {
       return permSchema
     }
 
-    return { schema, entities, withPermissions }
+    const clearPermissionCache = (id?: string) => {
+      if (id) cache.delete(id)
+      else cache.clear()
+    }
+
+    return { schema, entities, withPermissions, clearPermissionCache }
   }
 
   private logDebugInfo(schema: GraphQLSchema): void {

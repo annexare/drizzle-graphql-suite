@@ -68,7 +68,7 @@ function readOnly(): TableAccess
 Method returned by `buildSchema()` and `buildSchemaFromDrizzle()`. Builds a filtered `GraphQLSchema` from a `PermissionConfig`.
 
 ```ts
-const { schema, withPermissions } = buildSchema(db, baseConfig)
+const { schema, withPermissions, clearPermissionCache } = buildSchema(db, baseConfig)
 
 const adminSchema = schema  // full schema
 const userSchema = withPermissions(restricted('user', { posts: { query: true } }))
@@ -89,6 +89,20 @@ const schema1 = withPermissions(restricted('user', { posts: { query: true } }))
 const schema2 = withPermissions(restricted('user', { posts: { query: true } }))
 schema1 === schema2  // true (same id = 'user')
 ```
+
+### Cache Management
+
+Use `clearPermissionCache` to evict cached schemas — useful when permission IDs come from per-user data and the cache can grow without bound.
+
+```ts
+// Clear all cached permission schemas
+clearPermissionCache()
+
+// Clear a specific cached entry (e.g., on user logout)
+clearPermissionCache('user-123')
+```
+
+> **Note:** When using per-user IDs (e.g., `withPermissions(restricted(user.id, ...))`), consider evicting the entry on logout or periodically clearing the full cache to prevent unbounded growth.
 
 ### Empty Schemas
 
@@ -188,7 +202,7 @@ function withRowSecurity(
 ): HooksConfig
 ```
 
-Each rule function receives the GraphQL `context` and returns a filter object matching the table's `where` input shape. The generated hook merges this filter with any existing `where` argument from the query.
+Each rule function receives the GraphQL `context` and returns a filter object matching the table's `where` input shape. The generated hook merges this filter with any existing `where` argument from the query. When both the user-supplied filter and the security rule target the same field, the security rule's value **overrides** the user-supplied one (it is not ANDed). User-supplied filters on other fields are preserved.
 
 ## Hook Composition
 
