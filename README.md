@@ -6,7 +6,7 @@ Auto-generated GraphQL CRUD, type-safe clients, and React Query hooks from Drizz
 
 `drizzle-graphql-suite` is a three-layer toolkit that turns your Drizzle ORM schema into a fully working GraphQL API with end-to-end type safety:
 
-1. **Schema builder** — generates a complete GraphQL schema with CRUD operations, relation-level filtering, and per-operation hooks from Drizzle table definitions.
+1. **Schema builder** — generates a complete GraphQL schema with CRUD operations, relation-level filtering, per-operation hooks, and runtime permissions from Drizzle table definitions.
 2. **Client** — provides a type-safe GraphQL client that infers query/mutation types directly from your Drizzle schema, with full TypeScript support for filters, relations, and results.
 3. **React Query hooks** — wraps the client in TanStack React Query hooks for caching, pagination, and mutations with automatic cache invalidation.
 
@@ -16,7 +16,7 @@ Inspired by [`drizzle-graphql`](https://github.com/drizzle-team/drizzle-graphql)
 
 | Subpath | Package | Description |
 |---------|---------|-------------|
-| `drizzle-graphql-suite/schema` | [`@drizzle-graphql-suite/schema`](packages/schema/README.md) | GraphQL schema builder with CRUD, filtering, hooks, and codegen |
+| `drizzle-graphql-suite/schema` | [`@drizzle-graphql-suite/schema`](packages/schema/README.md) | GraphQL schema builder with CRUD, filtering, hooks, permissions, and codegen |
 | `drizzle-graphql-suite/client` | [`@drizzle-graphql-suite/client`](packages/client/README.md) | Type-safe GraphQL client with full Drizzle type inference |
 | `drizzle-graphql-suite/query` | [`@drizzle-graphql-suite/query`](packages/query/README.md) | TanStack React Query hooks for the client |
 
@@ -50,7 +50,7 @@ import { createYoga } from 'graphql-yoga'
 import { createServer } from 'node:http'
 import { db } from './db'
 
-const { schema } = buildSchema(db, {
+const { schema, withPermissions } = buildSchema(db, {
   tables: { exclude: ['session', 'verification'] },
   hooks: {
     user: {
@@ -66,6 +66,20 @@ const { schema } = buildSchema(db, {
 const yoga = createYoga({ schema })
 const server = createServer(yoga)
 server.listen(4000)
+```
+
+#### Per-Role Schemas (Optional)
+
+```ts
+import { permissive, restricted, readOnly } from 'drizzle-graphql-suite/schema'
+
+// Cached per id — call withPermissions on each request
+const schemas = {
+  admin: schema,
+  editor: withPermissions(permissive('editor', { audit: false, user: readOnly() })),
+  viewer: withPermissions(restricted('viewer', { post: { query: true } })),
+}
+```
 ```
 
 ### 2. Client — Type-Safe Queries
