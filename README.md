@@ -1,3 +1,7 @@
+[![Monthly Downloads](https://img.shields.io/npm/dm/drizzle-graphql-suite.svg)](https://www.npmjs.com/package/drizzle-graphql-suite)
+[![NPM](https://img.shields.io/npm/v/drizzle-graphql-suite.svg 'NPM package version')](https://www.npmjs.com/package/drizzle-graphql-suite)
+[![CI](https://github.com/annexare/drizzle-graphql-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/annexare/drizzle-graphql-suite/actions/workflows/ci.yml)
+
 # drizzle-graphql-suite
 
 Auto-generated GraphQL CRUD, type-safe clients, and React Query hooks from Drizzle PostgreSQL schemas.
