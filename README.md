@@ -182,7 +182,8 @@ new Elysia()
 This repo includes a [skills.sh](https://skills.sh) skill that provides AI coding agents (Claude Code, Cursor, etc.) with accurate, up-to-date guidance for all three packages.
 
 ```bash
-npx skills add annexare/drizzle-graphql-suite
+bunx skills add annexare/drizzle-graphql-suite
+# or: npx skills add annexare/drizzle-graphql-suite
 ```
 
 ## License
