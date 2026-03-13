@@ -62,7 +62,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run --filter '@drizzle-graphql-suite/schema' --filter '@drizzle-graphql-suite/client' build && bun run --filter '@drizzle-graphql-suite/query' build",
+    "build": "bun run --filter '@drizzle-graphql-suite/schema' build && bun run --filter '@drizzle-graphql-suite/client' build && bun run --filter '@drizzle-graphql-suite/query' build",
     "check-types": "bun run --filter '*' check-types",
     "test": "bun run --filter '*' test",
     "lint": "bunx @biomejs/biome check --write .",

@@ -1,7 +1,9 @@
+import type { BuildSchemaConfig } from '@drizzle-graphql-suite/schema'
+
 import { createEntityClient, type EntityClient } from './entity'
 import { GraphQLClientError, NetworkError } from './errors'
 import type { InferEntityDefs } from './infer'
-import { buildSchemaDescriptor, type ClientSchemaConfig } from './schema-builder'
+import { buildSchemaDescriptor } from './schema-builder'
 import type { AnyEntityDefs, ClientConfig, SchemaDescriptor } from './types'
 
 export class GraphQLClient<
@@ -82,7 +84,7 @@ export class GraphQLClient<
 
 export type DrizzleClientConfig<
   TSchema extends Record<string, unknown>,
-  TConfig extends ClientSchemaConfig,
+  TConfig extends BuildSchemaConfig,
 > = {
   schema: TSchema
   config: TConfig
@@ -92,7 +94,7 @@ export type DrizzleClientConfig<
 
 export function createDrizzleClient<
   TSchema extends Record<string, unknown>,
-  const TConfig extends ClientSchemaConfig,
+  const TConfig extends BuildSchemaConfig,
 >(
   options: DrizzleClientConfig<TSchema, TConfig>,
 ): GraphQLClient<SchemaDescriptor, InferEntityDefs<TSchema, TConfig>> {

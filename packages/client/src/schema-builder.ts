@@ -1,19 +1,13 @@
+import type { BuildSchemaConfig } from '@drizzle-graphql-suite/schema'
 import { getTableColumns, getTableName, is, Many, One, Relations, Table } from 'drizzle-orm'
 
 import type { SchemaDescriptor } from './types'
-
-export type ClientSchemaConfig = {
-  mutations?: boolean
-  suffixes?: { list?: string; single?: string }
-  tables?: { exclude?: readonly string[] }
-  pruneRelations?: Record<string, false | 'leaf' | { only: string[] }>
-}
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export function buildSchemaDescriptor(
   schema: Record<string, unknown>,
-  config: ClientSchemaConfig = {},
+  config: BuildSchemaConfig = {},
 ): SchemaDescriptor {
   const excludeSet = new Set(config.tables?.exclude ?? [])
   const listSuffix = config.suffixes?.list ?? 's'

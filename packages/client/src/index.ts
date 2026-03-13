@@ -8,12 +8,13 @@ export function createClient<
   return new GraphQLClient<TSchema, TDefs>(config)
 }
 
+export type { BuildSchemaConfig } from '@drizzle-graphql-suite/schema'
+
 export type { DrizzleClientConfig } from './client'
 export { createDrizzleClient, GraphQLClient } from './client'
 export type { EntityClient } from './entity'
 export { GraphQLClientError, NetworkError } from './errors'
 export type { InferEntityDefs } from './infer'
-export type { ClientSchemaConfig } from './schema-builder'
 export { buildSchemaDescriptor } from './schema-builder'
 export type {
   AnyEntityDefs,

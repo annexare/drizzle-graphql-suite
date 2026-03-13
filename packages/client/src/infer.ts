@@ -144,9 +144,12 @@ type NumberToTuple<N extends number, T extends unknown[] = []> = T['length'] ext
     : NumberToTuple<N, [...T, 0]>
 
 // Extract filter relation depth from config. Defaults to 1 if not specified.
+// Guards against widened `number` type (when config isn't `as const`): falls back to depth 1.
 type ExtractFilterDepth<TConfig> = TConfig extends { limitRelationDepth: infer D }
   ? D extends number
-    ? NumberToTuple<D>
+    ? number extends D
+      ? [0]
+      : NumberToTuple<D>
     : [0]
   : [0]
 
