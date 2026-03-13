@@ -74,9 +74,14 @@ type IsResolvableRelation<TSchema, TRel> = TRel extends { entity: infer E }
     : false
   : false
 
+// Depth limiter: decrement by dropping one element from a tuple.
+// Depth 0 = [] (stop recursing), Depth 1 = [0], Depth 2 = [0, 0], etc.
+type Prev<T extends unknown[]> = T extends [unknown, ...infer Rest] ? Rest : []
+
 // Given a schema and a table's raw relation defs, produce relation filter fields.
 // Relations whose target can't be resolved are omitted via key remapping.
-type InferRelationFilterFields<TSchema, TRels> = {
+// TDepth limits recursion to prevent infinite type expansion on circular schemas.
+type InferRelationFilterFields<TSchema, TRels, TDepth extends unknown[]> = {
   [K in keyof TRels as IsResolvableRelation<TSchema, TRels[K]> extends true
     ? K
     : never]?: TRels[K] extends { entity: infer E; type: infer TRelType }
@@ -86,8 +91,8 @@ type InferRelationFilterFields<TSchema, TRels> = {
           ? ExtractTables<TSchema>[RK] extends infer TTarget
             ? TTarget extends Table
               ? TRelType extends 'many'
-                ? ManyRelationFilter<InferEntityFilters<TSchema, TTarget>>
-                : InferEntityFilters<TSchema, TTarget>
+                ? ManyRelationFilter<InferEntityFilters<TSchema, TTarget, Prev<TDepth>>>
+                : InferEntityFilters<TSchema, TTarget, Prev<TDepth>>
               : never
             : never
           : never
@@ -96,12 +101,18 @@ type InferRelationFilterFields<TSchema, TRels> = {
     : never
 }
 
-// Full entity filters: scalar columns + relation filters + OR combinator
-type InferEntityFilters<TSchema, T extends Table> = ScalarColumnFilters<
-  WireFormat<T['$inferSelect']>
-> &
-  InferRelationFilterFields<TSchema, InferRelationDefs<TSchema, TableDbName<T>>> & {
-    OR?: InferEntityFilters<TSchema, T>[]
+// Full entity filters: scalar columns + relation filters + OR combinator.
+// TDepth limits relation filter recursion (default: 1 level deep).
+type InferEntityFilters<
+  TSchema,
+  T extends Table,
+  TDepth extends unknown[] = [0],
+> = ScalarColumnFilters<WireFormat<T['$inferSelect']>> &
+  (TDepth extends []
+    ? // biome-ignore lint/complexity/noBannedTypes: empty intersection identity
+      {}
+    : InferRelationFilterFields<TSchema, InferRelationDefs<TSchema, TableDbName<T>>, TDepth>) & {
+    OR?: InferEntityFilters<TSchema, T, TDepth>[]
   }
 
 // ─── Input Types ──────────────────────────────────────────
@@ -118,11 +129,26 @@ type InferOrderBy<T> = T extends Table
   ? { [K in keyof T['$inferSelect']]?: { direction: 'asc' | 'desc'; priority: number } }
   : never
 
-// ─── Config Exclusions ────────────────────────────────────
+// ─── Config Extraction ───────────────────────────────────
 
 type ExcludedNames<TConfig> = TConfig extends { tables: { exclude: readonly (infer T)[] } }
   ? T
   : never
+
+// Convert a numeric literal to a tuple of that length for depth tracking.
+// Capped at 5 to prevent excessive type expansion on large schemas.
+type NumberToTuple<N extends number, T extends unknown[] = []> = T['length'] extends N
+  ? T
+  : T['length'] extends 5
+    ? T
+    : NumberToTuple<N, [...T, 0]>
+
+// Extract filter relation depth from config. Defaults to 1 if not specified.
+type ExtractFilterDepth<TConfig> = TConfig extends { limitRelationDepth: infer D }
+  ? D extends number
+    ? NumberToTuple<D>
+    : [0]
+  : [0]
 
 // ─── DB Name Resolution ──────────────────────────────────
 
@@ -160,11 +186,11 @@ type ResolveRelationDefs<TSchema, TRels> = {
 // ─── Per-Entity Def Builder ───────────────────────────────
 // Uses conditional type to ensure T is narrowed to Table
 
-type BuildEntityDef<TSchema, T> = T extends Table
+type BuildEntityDef<TSchema, T, TDepth extends unknown[]> = T extends Table
   ? {
       fields: WireFormat<T['$inferSelect']>
       relations: ResolveRelationDefs<TSchema, InferRelationDefs<TSchema, TableDbName<T>>>
-      filters: InferEntityFilters<TSchema, T>
+      filters: InferEntityFilters<TSchema, T, TDepth>
       insertInput: InferInsertInput<T>
       updateInput: InferUpdateInput<T>
       orderBy: InferOrderBy<T>
@@ -178,5 +204,5 @@ export type InferEntityDefs<TSchema, TConfig = Record<string, never>> = {
     ? never
     : K extends string
       ? K
-      : never]: BuildEntityDef<TSchema, ExtractTables<TSchema>[K]>
+      : never]: BuildEntityDef<TSchema, ExtractTables<TSchema>[K], ExtractFilterDepth<TConfig>>
 }
