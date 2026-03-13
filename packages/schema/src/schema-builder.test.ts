@@ -1,14 +1,96 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  type Column,
   createTableRelationsHelpers,
   extractTablesRelationalConfig,
   getTableColumns,
+  type Relation,
   relations,
   type SQL,
+  type Table,
 } from 'drizzle-orm'
-import { integer, pgSchema, pgTable, text, uuid } from 'drizzle-orm/pg-core'
+import { integer, type PgDatabase, pgSchema, pgTable, text, uuid } from 'drizzle-orm/pg-core'
 
 import { SchemaBuilder } from './schema-builder'
+
+// ─── Testable Subclass ──────────────────────────────────────
+// Exposes protected methods for direct unit testing with full type safety.
+
+class TestableSchemaBuilder extends SchemaBuilder {
+  /** Column-level filter extraction */
+  // biome-ignore lint/suspicious/noExplicitAny: dynamic GraphQL filter input
+  extractColumnFilters(column: Column, columnName: string, operators: any): SQL | undefined {
+    return super.extractColumnFilters(column, columnName, operators)
+  }
+
+  /** Table-level filter extraction (columns + relations + OR) */
+  // biome-ignore lint/suspicious/noExplicitAny: dynamic GraphQL filter input
+  extractTableColumnFilters(table: Table, tableName: string, filters: any): SQL | undefined {
+    return super.extractTableColumnFilters(table, tableName, filters)
+  }
+
+  /** Relation filter extraction (some/every/none quantifiers) */
+  extractRelationFilters(
+    table: Table,
+    tableName: string,
+    relationName: string,
+    filterValue: Record<string, unknown>,
+  ): SQL | undefined {
+    return super.extractRelationFilters(table, tableName, relationName, filterValue)
+  }
+
+  /** Order-by extraction */
+  // biome-ignore lint/suspicious/noExplicitAny: dynamic GraphQL order input
+  extractOrderBy(table: Table, orderArgs: any): SQL[] {
+    return super.extractOrderBy(table, orderArgs)
+  }
+
+  /** Column selection from resolve tree */
+  extractColumns(tree: Record<string, { name: string }>, table: Table): Record<string, true> {
+    // biome-ignore lint/suspicious/noExplicitAny: simplified resolve tree for testing
+    return super.extractColumns(tree as any, table)
+  }
+
+  /** Join condition building */
+  buildJoinCondition(parentTable: Table, targetTable: Table, relation: Relation): SQL | undefined {
+    return super.buildJoinCondition(parentTable, targetTable, relation)
+  }
+
+  /** Access to internal tables map */
+  get _tables() {
+    return this.tables
+  }
+
+  /** Access to internal relation map */
+  get _relationMap() {
+    return this.relationMap
+  }
+}
+
+// ─── SQL Structure Helper ───────────────────────────────────
+// Renders a Drizzle SQL object into a human-readable structure string
+// for asserting the shape of generated SQL (and/or/eq/exists/not).
+// biome-ignore lint/suspicious/noExplicitAny: inspecting internal SQL chunks
+function describeSQL(s: any): string {
+  const parts: string[] = []
+  for (const chunk of s.queryChunks) {
+    if (chunk?.value && Array.isArray(chunk.value)) {
+      const val = chunk.value.join('')
+      if (val.trim()) parts.push(val.trim())
+    } else if (chunk?.queryChunks) {
+      parts.push(`(${describeSQL(chunk)})`)
+    } else {
+      parts.push('[param]')
+    }
+  }
+  return parts.join(' ')
+}
+
+/** Check if the SQL structure contains the given keyword (and, or, exists, not exists) */
+function sqlContains(result: SQL | undefined, keyword: string): boolean {
+  if (!result) return false
+  return describeSQL(result).includes(keyword)
+}
 
 // ─── Test Schema (unqualified) ──────────────────────────────
 
@@ -69,7 +151,18 @@ const schemaQualifiedSchema = {
 
 // ─── Mock DB ────────────────────────────────────────────────
 
-function createMockDb(schema: Record<string, unknown> = testSchema) {
+// biome-ignore lint/suspicious/noExplicitAny: partial mock of PgDatabase for testing
+type MockDb = PgDatabase<any, any, any>
+
+const queryFindStub = {
+  findMany: () => Promise.resolve([]),
+  findFirst: () => Promise.resolve(null),
+}
+
+function createMockDb(
+  schema: Record<string, unknown> = testSchema,
+  queryStubs?: Record<string, typeof queryFindStub>,
+): MockDb {
   const { tables, tableNamesMap } = extractTablesRelationalConfig(
     schema,
     createTableRelationsHelpers,
@@ -77,9 +170,9 @@ function createMockDb(schema: Record<string, unknown> = testSchema) {
 
   return {
     _: { fullSchema: schema, schema: tables, tableNamesMap },
-    query: {},
+    query: queryStubs ?? {},
     select: () => ({ from: () => ({ where: () => ({}) }) }),
-  }
+  } as MockDb
 }
 
 // ─── Test Schema (self-referencing) ─────────────────────────
@@ -120,21 +213,15 @@ const selfRefSchema = { node, tag, nodeRelations, tagRelations }
 describe('SchemaBuilder', () => {
   test('constructs without error from test schema', () => {
     const mockDb = createMockDb()
-    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
-    expect(() => new SchemaBuilder(mockDb as any)).not.toThrow()
+    expect(() => new SchemaBuilder(mockDb)).not.toThrow()
   })
 
   test('buildEntities generates queries and mutations', () => {
-    const mockDb = createMockDb()
-    // db.query needs stubs for each table so createQueryResolver doesn't throw
-    const findStub = {
-      findMany: () => Promise.resolve([]),
-      findFirst: () => Promise.resolve(null),
-    }
-    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
-    ;(mockDb as any).query = { parent: findStub, child: findStub }
-    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
-    const builder = new SchemaBuilder(mockDb as any)
+    const mockDb = createMockDb(testSchema, {
+      parent: queryFindStub,
+      child: queryFindStub,
+    })
+    const builder = new SchemaBuilder(mockDb)
     const entities = builder.buildEntities()
 
     expect(entities.queries).toBeDefined()
@@ -149,13 +236,12 @@ describe('SchemaBuilder', () => {
 describe('buildJoinCondition', () => {
   test('One relation (child.parent) returns SQL join condition', () => {
     const mockDb = createMockDb()
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    const builder = new SchemaBuilder(mockDb as any) as any
+    const builder = new TestableSchemaBuilder(mockDb)
 
-    const relations = builder.relationMap.child
+    const relations = builder._relationMap.child
     const { relation } = relations.parent
-    const parentTable = builder.tables.parent
-    const childTable = builder.tables.child
+    const parentTable = builder._tables.parent
+    const childTable = builder._tables.child
 
     const result: SQL | undefined = builder.buildJoinCondition(childTable, parentTable, relation)
     expect(result).toBeDefined()
@@ -164,13 +250,12 @@ describe('buildJoinCondition', () => {
 
   test('Many relation (parent.children) returns SQL join condition', () => {
     const mockDb = createMockDb()
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    const builder = new SchemaBuilder(mockDb as any) as any
+    const builder = new TestableSchemaBuilder(mockDb)
 
-    const relations = builder.relationMap.parent
+    const relations = builder._relationMap.parent
     const { relation } = relations.children
-    const parentTable = builder.tables.parent
-    const childTable = builder.tables.child
+    const parentTable = builder._tables.parent
+    const childTable = builder._tables.child
 
     const result: SQL | undefined = builder.buildJoinCondition(parentTable, childTable, relation)
     expect(result).toBeDefined()
@@ -179,8 +264,7 @@ describe('buildJoinCondition', () => {
 
   test('broken relation returns undefined', () => {
     const mockDb = createMockDb()
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    const builder = new SchemaBuilder(mockDb as any) as any
+    const builder = new TestableSchemaBuilder(mockDb)
 
     // Construct a fake relation object that normalizeRelation cannot resolve
     const fakeRelation = { referencedTable: parent, fieldName: 'fake' }
@@ -193,13 +277,12 @@ describe('buildJoinCondition', () => {
 describe('buildJoinCondition (schema-qualified tables)', () => {
   test('One relation uses unqualified table name for parent column', () => {
     const mockDb = createMockDb(schemaQualifiedSchema)
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    const builder = new SchemaBuilder(mockDb as any) as any
+    const builder = new TestableSchemaBuilder(mockDb)
 
-    const relations = builder.relationMap.schemaChild
+    const relations = builder._relationMap.schemaChild
     const { relation } = relations.parent
-    const parentTable = builder.tables.schemaParent
-    const childTable = builder.tables.schemaChild
+    const parentTable = builder._tables.schemaParent
+    const childTable = builder._tables.schemaChild
 
     const result: SQL | undefined = builder.buildJoinCondition(childTable, parentTable, relation)
     expect(result).toBeDefined()
@@ -224,13 +307,12 @@ describe('buildJoinCondition (schema-qualified tables)', () => {
 
   test('Many relation uses unqualified table name for parent column', () => {
     const mockDb = createMockDb(schemaQualifiedSchema)
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    const builder = new SchemaBuilder(mockDb as any) as any
+    const builder = new TestableSchemaBuilder(mockDb)
 
-    const relations = builder.relationMap.schemaParent
+    const relations = builder._relationMap.schemaParent
     const { relation } = relations.children
-    const parentTable = builder.tables.schemaParent
-    const childTable = builder.tables.schemaChild
+    const parentTable = builder._tables.schemaParent
+    const childTable = builder._tables.schemaChild
 
     const result: SQL | undefined = builder.buildJoinCondition(parentTable, childTable, relation)
     expect(result).toBeDefined()
@@ -253,8 +335,7 @@ describe('buildJoinCondition (schema-qualified tables)', () => {
 
   test('constructs without error from schema-qualified schema', () => {
     const mockDb = createMockDb(schemaQualifiedSchema)
-    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
-    expect(() => new SchemaBuilder(mockDb as any)).not.toThrow()
+    expect(() => new SchemaBuilder(mockDb)).not.toThrow()
   })
 })
 
@@ -721,12 +802,11 @@ describe('logDebugInfo', () => {
 
 describe('extractColumnFilters', () => {
   function getBuilder() {
-    const mockDb = createMockDb()
-    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
-    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
-    ;(mockDb as any).query = { parent: findStub, child: findStub }
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    return new SchemaBuilder(mockDb as any) as any
+    const mockDb = createMockDb(testSchema, {
+      parent: queryFindStub,
+      child: queryFindStub,
+    })
+    return new TestableSchemaBuilder(mockDb)
   }
 
   const parentTable = pgTable('filter_test', {
@@ -846,21 +926,327 @@ describe('extractColumnFilters', () => {
     expect(result).toBeDefined()
   })
 
-  test('OR with variants', () => {
+  test('OR with variants produces or()', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', {
       OR: [{ eq: 'Alice' }, { eq: 'Bob' }],
     })
     expect(result).toBeDefined()
+    expect(sqlContains(result, 'or')).toBe(true)
   })
 
-  test('OR with other fields ANDs them', () => {
+  test('OR with other fields produces and(field, or(...))', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', {
       eq: 'Alice',
       OR: [{ eq: 'Bob' }, { eq: 'Charlie' }],
     })
     expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+    expect(sqlContains(result, 'or')).toBe(true)
+  })
+
+  test('empty OR array returns undefined', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      OR: [],
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('single OR variant returns eq() directly (no or() wrapper)', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      OR: [{ eq: 'Alice' }],
+    })
+    expect(result).toBeDefined()
+    // Single variant → unwrapped, no or()
+    expect(sqlContains(result, 'or')).toBe(false)
+    expect(sqlContains(result, '=')).toBe(true)
+  })
+
+  test('empty OR with other fields ignores OR, returns field filter', () => {
+    const builder = getBuilder()
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      eq: 'Alice',
+      OR: [],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'or')).toBe(false)
+    expect(sqlContains(result, '=')).toBe(true)
+  })
+
+  test('OR variants all undefined returns undefined', () => {
+    const builder = getBuilder()
+    // All variants have null/false values which are skipped → each returns undefined
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      OR: [{ eq: null }, { ne: false }],
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('OR + fields where fieldClause is undefined returns orClause only', () => {
+    const builder = getBuilder()
+    // eq: null is skipped → fieldClause undefined, but OR has valid variants
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      eq: null,
+      OR: [{ eq: 'Alice' }, { eq: 'Bob' }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'or')).toBe(true)
+    // No and() since fieldClause is undefined
+    expect(sqlContains(result, 'and')).toBe(false)
+  })
+
+  test('OR + fields where orClause is undefined returns fieldClause only', () => {
+    const builder = getBuilder()
+    // OR variants all null → orClause undefined, but eq field is valid
+    const result = builder.extractColumnFilters(parentCols.name, 'name', {
+      eq: 'Alice',
+      OR: [{ eq: null }, { ne: false }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, '=')).toBe(true)
+    // No or() or and() since orClause is undefined
+    expect(sqlContains(result, 'or')).toBe(false)
+    expect(sqlContains(result, 'and')).toBe(false)
+  })
+})
+
+// ─── extractOrderBy ─────────────────────────────────────────
+
+// ─── extractTableColumnFilters ──────────────────────────────
+
+describe('extractTableColumnFilters', () => {
+  function getBuilder() {
+    const mockDb = createMockDb(testSchema, {
+      parent: queryFindStub,
+      child: queryFindStub,
+    })
+    return new TestableSchemaBuilder(mockDb)
+  }
+
+  test('column filter only produces eq()', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      name: { eq: 'Alice' },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, '=')).toBe(true)
+  })
+
+  test('multiple column filters produce and()', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(child, 'child', {
+      label: { eq: 'test' },
+      parentId: { isNotNull: true },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+  })
+
+  test('OR only at table level produces or()', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      OR: [{ name: { eq: 'Alice' } }, { name: { eq: 'Bob' } }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'or')).toBe(true)
+  })
+
+  test('OR with column filters produces and(field, or(...))', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      name: { like: '%test%' },
+      OR: [{ name: { eq: 'Alice' } }, { name: { eq: 'Bob' } }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+    expect(sqlContains(result, 'or')).toBe(true)
+  })
+
+  test('empty OR array at table level returns undefined when no other filters', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      OR: [],
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('empty OR with column filters ignores OR', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      name: { eq: 'Alice' },
+      OR: [],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'or')).toBe(false)
+  })
+
+  test('null filter values are skipped', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      name: null,
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('relation filter on one-to-many produces exists()', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      children: { some: { label: { eq: 'test' } } },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('relation filter on many-to-one produces exists()', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(child, 'child', {
+      parent: { name: { eq: 'Alice' } },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('column + relation filters produce and(eq, exists)', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(child, 'child', {
+      label: { like: '%test%' },
+      parent: { name: { eq: 'Alice' } },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('OR with relation filters produces and(exists, or(...))', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      children: { some: { label: { eq: 'active' } } },
+      OR: [{ name: { eq: 'Alice' } }, { name: { eq: 'Bob' } }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+    expect(sqlContains(result, 'or')).toBe(true)
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('OR with column + relation filters produces and(and(col, exists), or(...))', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(child, 'child', {
+      label: { eq: 'primary' },
+      parent: { name: { like: '%admin%' } },
+      OR: [{ label: { eq: 'fallback1' } }, { label: { eq: 'fallback2' } }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+    expect(sqlContains(result, 'or')).toBe(true)
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('OR variant containing relation filter produces or() with exists()', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      OR: [{ children: { some: { label: { eq: 'active' } } } }, { name: { eq: 'fallback' } }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'or')).toBe(true)
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('single OR variant at table level (no or() wrapper)', () => {
+    const builder = getBuilder()
+    const result = builder.extractTableColumnFilters(parent, 'parent', {
+      OR: [{ name: { eq: 'Alice' } }],
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'or')).toBe(false)
+  })
+})
+
+// ─── extractRelationFilters ─────────────────────────────────
+
+describe('extractRelationFilters', () => {
+  function getBuilder() {
+    const mockDb = createMockDb(testSchema, {
+      parent: queryFindStub,
+      child: queryFindStub,
+    })
+    return new TestableSchemaBuilder(mockDb)
+  }
+
+  test('many relation: some produces exists()', () => {
+    const builder = getBuilder()
+    const result = builder.extractRelationFilters(parent, 'parent', 'children', {
+      some: { label: { eq: 'test' } },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'exists')).toBe(true)
+    expect(sqlContains(result, 'not')).toBe(false)
+  })
+
+  test('many relation: every produces not(exists(... and not(...)))', () => {
+    const builder = getBuilder()
+    const result = builder.extractRelationFilters(parent, 'parent', 'children', {
+      every: { label: { eq: 'test' } },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'not')).toBe(true)
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('many relation: none produces not(exists())', () => {
+    const builder = getBuilder()
+    const result = builder.extractRelationFilters(parent, 'parent', 'children', {
+      none: { label: { eq: 'test' } },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'not')).toBe(true)
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('many relation: multiple quantifiers produce and()', () => {
+    const builder = getBuilder()
+    const result = builder.extractRelationFilters(parent, 'parent', 'children', {
+      some: { label: { eq: 'active' } },
+      none: { label: { eq: 'deleted' } },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('one relation: direct filter produces exists() (no quantifier needed)', () => {
+    const builder = getBuilder()
+    const result = builder.extractRelationFilters(child, 'child', 'parent', {
+      name: { eq: 'Alice' },
+    })
+    expect(result).toBeDefined()
+    expect(sqlContains(result, 'exists')).toBe(true)
+  })
+
+  test('unknown relation returns undefined', () => {
+    const builder = getBuilder()
+    const result = builder.extractRelationFilters(parent, 'parent', 'nonexistent', {
+      some: { label: { eq: 'test' } },
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('many relation: empty quantifier object returns undefined', () => {
+    const builder = getBuilder()
+    const result = builder.extractRelationFilters(parent, 'parent', 'children', {})
+    expect(result).toBeUndefined()
+  })
+
+  test('many relation: every with empty filter returns undefined (trivially true)', () => {
+    const builder = getBuilder()
+    // every with no inner filter conditions → trivially true → undefined
+    const result = builder.extractRelationFilters(parent, 'parent', 'children', {
+      every: {},
+    })
+    expect(result).toBeUndefined()
   })
 })
 
@@ -868,12 +1254,11 @@ describe('extractColumnFilters', () => {
 
 describe('extractOrderBy', () => {
   function getBuilder() {
-    const mockDb = createMockDb()
-    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
-    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
-    ;(mockDb as any).query = { parent: findStub, child: findStub }
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    return new SchemaBuilder(mockDb as any) as any
+    const mockDb = createMockDb(testSchema, {
+      parent: queryFindStub,
+      child: queryFindStub,
+    })
+    return new TestableSchemaBuilder(mockDb)
   }
 
   test('asc direction', () => {
@@ -919,12 +1304,11 @@ describe('extractOrderBy', () => {
 
 describe('extractColumns', () => {
   function getBuilder() {
-    const mockDb = createMockDb()
-    const findStub = { findMany: () => Promise.resolve([]), findFirst: () => Promise.resolve(null) }
-    // biome-ignore lint/suspicious/noExplicitAny: mock db for testing
-    ;(mockDb as any).query = { parent: findStub, child: findStub }
-    // biome-ignore lint/suspicious/noExplicitAny: accessing private method for testing
-    return new SchemaBuilder(mockDb as any) as any
+    const mockDb = createMockDb(testSchema, {
+      parent: queryFindStub,
+      child: queryFindStub,
+    })
+    return new TestableSchemaBuilder(mockDb)
   }
 
   test('selects matching table columns', () => {
