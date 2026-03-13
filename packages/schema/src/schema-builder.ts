@@ -123,11 +123,11 @@ type SelectData<TWithOrder extends boolean> = {
 
 export class SchemaBuilder {
   // biome-ignore lint/suspicious/noExplicitAny: Drizzle generic parameters
-  private db: PgDatabase<any, any, any>
-  private tables: Record<string, PgTable>
-  private relationMap: Record<string, Record<string, TableNamedRelations>>
-  private relationalSchema: TablesRelationalConfig
-  private tableNamesMap: Record<string, string>
+  protected db: PgDatabase<any, any, any>
+  protected tables: Record<string, PgTable>
+  protected relationMap: Record<string, Record<string, TableNamedRelations>>
+  protected relationalSchema: TablesRelationalConfig
+  protected tableNamesMap: Record<string, string>
   private config: BuildSchemaConfig
   private hooks: HooksConfig
   private adapter: DbAdapter
@@ -1321,7 +1321,7 @@ export class SchemaBuilder {
 
   // ─── Filter Extraction ───────────────────────────────────────
 
-  private extractColumnFilters(
+  protected extractColumnFilters(
     column: Column,
     columnName: string,
     // biome-ignore lint/suspicious/noExplicitAny: dynamic GraphQL filter input
@@ -1399,7 +1399,7 @@ export class SchemaBuilder {
     return variants.length ? (variants.length > 1 ? and(...variants) : variants[0]) : undefined
   }
 
-  private extractTableColumnFilters(
+  protected extractTableColumnFilters(
     table: Table,
     tableName: string,
     // biome-ignore lint/suspicious/noExplicitAny: dynamic GraphQL filter input
@@ -1476,7 +1476,7 @@ export class SchemaBuilder {
 
   // ─── Relation Filter Extraction (EXISTS subqueries) ──────────
 
-  private extractRelationFilters(
+  protected extractRelationFilters(
     table: Table,
     tableName: string,
     relationName: string,
@@ -1544,7 +1544,7 @@ export class SchemaBuilder {
     }
   }
 
-  private buildExistsSubquery(
+  protected buildExistsSubquery(
     parentTable: Table,
     targetTable: Table,
     relation: Relation,
@@ -1590,7 +1590,7 @@ export class SchemaBuilder {
     }
   }
 
-  private buildJoinCondition(
+  protected buildJoinCondition(
     parentTable: Table,
     _targetTable: Table,
     relation: Relation,
@@ -1633,7 +1633,7 @@ export class SchemaBuilder {
   // ─── Order By Extraction ─────────────────────────────────────
 
   // biome-ignore lint/suspicious/noExplicitAny: dynamic GraphQL order input
-  private extractOrderBy(table: Table, orderArgs: any): SQL[] {
+  protected extractOrderBy(table: Table, orderArgs: any): SQL[] {
     const res: SQL[] = []
 
     for (const [column, config] of Object.entries(orderArgs).sort((a, b) => {
@@ -1653,7 +1653,7 @@ export class SchemaBuilder {
 
   // ─── Column Selection ────────────────────────────────────────
 
-  private extractColumns(tree: Record<string, ResolveTree>, table: Table): Record<string, true> {
+  protected extractColumns(tree: Record<string, ResolveTree>, table: Table): Record<string, true> {
     const tableColumns = getTableColumns(table)
     const selectedColumns: [string, true][] = []
 
