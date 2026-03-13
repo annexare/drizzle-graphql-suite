@@ -336,6 +336,27 @@ type _3 = ExpectTrue<
     : false
 >
 
+// Depth 5: five levels deep
+// ruleEntry → rule (1) → parentItem (2) → fields (3) → fieldType (4) → fields (5)
+type RuleEntryFiltersD5 = DefsDepth5['ruleEntry']['filters']
+type _4a = ExpectTrue<
+  RuleEntryFiltersD5 extends {
+    rule?: {
+      parentItem?: {
+        fields?: {
+          some?: {
+            fieldType?: {
+              fields?: { some?: { value?: { eq?: string | null } } }
+            }
+          }
+        }
+      }
+    }
+  }
+    ? true
+    : false
+>
+
 // Exclusions: excluded tables should not appear
 type _4 = ExpectTrue<'attachment' extends keyof DefsExcluded ? false : true>
 type _5 = ExpectTrue<'item' extends keyof DefsExcluded ? true : false>
@@ -380,5 +401,27 @@ describe('InferEntityDefs - complex schema', () => {
       },
     }
     expect(filter.linkedItem?.customizations?.some?.value?.like).toBe('%test%')
+  })
+
+  test('filter type supports 5-level nested relation filters at depth 5', () => {
+    // ruleEntry → rule → parentItem → fields → fieldType → fields
+    const filter: RuleEntryFiltersD5 = {
+      rule: {
+        parentItem: {
+          fields: {
+            some: {
+              fieldType: {
+                fields: {
+                  some: { value: { eq: 'deep' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    }
+    expect(
+      filter.rule?.parentItem?.fields?.some?.fieldType?.fields?.some?.value?.eq,
+    ).toBe('deep')
   })
 })
