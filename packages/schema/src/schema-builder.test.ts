@@ -106,6 +106,12 @@ function sqlContains(result: SQL | undefined, keyword: string): boolean {
   return describeSQL(result).includes(keyword)
 }
 
+/** Get the SQL description string for exact matching */
+function sqlDesc(result: SQL | undefined): string {
+  if (!result) return ''
+  return describeSQL(result)
+}
+
 // ─── Test Schema (unqualified) ──────────────────────────────
 
 const parent = pgTable('parent', {
@@ -237,17 +243,33 @@ describe('SchemaBuilder', () => {
     const builder = new SchemaBuilder(mockDb)
     const entities = builder.buildEntities()
 
-    expect(entities.queries).toBeDefined()
-    expect(entities.mutations).toBeDefined()
-    expect(entities.queries.parent).toBeDefined()
-    expect(entities.queries.child).toBeDefined()
-    expect(entities.queries.parentCount).toBeDefined()
-    expect(entities.queries.childCount).toBeDefined()
+    // Queries: list, single, count for each table
+    expect(Object.keys(entities.queries)).toEqual(
+      expect.arrayContaining([
+        'parent',
+        'parentSingle',
+        'parentCount',
+        'child',
+        'childSingle',
+        'childCount',
+      ]),
+    )
+    // Mutations: insert, update, delete for each table
+    expect(Object.keys(entities.mutations)).toEqual(
+      expect.arrayContaining([
+        'insertIntoParent',
+        'updateParent',
+        'deleteFromParent',
+        'insertIntoChild',
+        'updateChild',
+        'deleteFromChild',
+      ]),
+    )
   })
 })
 
 describe('buildJoinCondition', () => {
-  test('One relation (child.parent) returns SQL join condition', () => {
+  test('One relation (child.parent) returns SQL join on parentId = id', () => {
     const mockDb = createMockDb()
     const builder = new TestableSchemaBuilder(mockDb)
 
@@ -258,10 +280,11 @@ describe('buildJoinCondition', () => {
 
     const result: SQL | undefined = builder.buildJoinCondition(childTable, parentTable, relation)
     expect(result).toBeDefined()
-    expect(result).not.toBeNull()
+    // Should produce an equality join condition
+    expect(sqlContains(result, '=')).toBe(true)
   })
 
-  test('Many relation (parent.children) returns SQL join condition', () => {
+  test('Many relation (parent.children) returns SQL join on id = parentId', () => {
     const mockDb = createMockDb()
     const builder = new TestableSchemaBuilder(mockDb)
 
@@ -272,7 +295,8 @@ describe('buildJoinCondition', () => {
 
     const result: SQL | undefined = builder.buildJoinCondition(parentTable, childTable, relation)
     expect(result).toBeDefined()
-    expect(result).not.toBeNull()
+    // Should produce an equality join condition
+    expect(sqlContains(result, '=')).toBe(true)
   })
 
   test('broken relation returns undefined', () => {
@@ -711,6 +735,10 @@ describe('mutations: false config', () => {
     const result = builder.build()
 
     expect(result.schema.getMutationType()).toBeUndefined()
+    // Query type should still be present
+    expect(result.schema.getQueryType()).toBeDefined()
+    // Entities should have no mutations
+    expect(Object.keys(result.entities.mutations)).toHaveLength(0)
   })
 })
 
@@ -751,61 +779,61 @@ describe('extractColumnFilters', () => {
   test('eq operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', { eq: 'Alice' })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] = [param]')
   })
 
   test('ne operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', { ne: 'Bob' })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] <> [param]')
   })
 
   test('gt operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.age, 'age', { gt: 18 })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] > [param]')
   })
 
   test('gte operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.age, 'age', { gte: 18 })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] >= [param]')
   })
 
   test('lt operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.age, 'age', { lt: 65 })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] < [param]')
   })
 
   test('lte operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.age, 'age', { lte: 65 })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] <= [param]')
   })
 
   test('like operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', { like: '%Alice%' })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] like [param]')
   })
 
   test('notLike operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', { notLike: '%Bob%' })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] not like [param]')
   })
 
   test('ilike operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', { ilike: '%alice%' })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] ilike [param]')
   })
 
   test('notIlike operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.name, 'name', { notIlike: '%bob%' })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] not ilike [param]')
   })
 
   test('inArray operator', () => {
@@ -813,7 +841,7 @@ describe('extractColumnFilters', () => {
     const result = builder.extractColumnFilters(parentCols.name, 'name', {
       inArray: ['Alice', 'Bob'],
     })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] in [param]')
   })
 
   test('notInArray operator', () => {
@@ -821,7 +849,7 @@ describe('extractColumnFilters', () => {
     const result = builder.extractColumnFilters(parentCols.name, 'name', {
       notInArray: ['Eve'],
     })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] not in [param]')
   })
 
   test('inArray with empty array throws', () => {
@@ -834,13 +862,13 @@ describe('extractColumnFilters', () => {
   test('isNull operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.age, 'age', { isNull: true })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] is null')
   })
 
   test('isNotNull operator', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.age, 'age', { isNotNull: true })
-    expect(result).toBeDefined()
+    expect(sqlDesc(result)).toBe('[param] is not null')
   })
 
   test('null/false operator values are skipped', () => {
@@ -856,6 +884,9 @@ describe('extractColumnFilters', () => {
     const builder = getBuilder()
     const result = builder.extractColumnFilters(parentCols.age, 'age', { gt: 18, lt: 65 })
     expect(result).toBeDefined()
+    expect(sqlContains(result, 'and')).toBe(true)
+    expect(sqlContains(result, '>')).toBe(true)
+    expect(sqlContains(result, '<')).toBe(true)
   })
 
   test('OR with variants produces or()', () => {
@@ -1197,12 +1228,14 @@ describe('extractOrderBy', () => {
     const builder = getBuilder()
     const result = builder.extractOrderBy(parent, { name: { direction: 'asc', priority: 1 } })
     expect(result).toHaveLength(1)
+    expect(sqlDesc(result[0])).toBe('[param] asc')
   })
 
   test('desc direction', () => {
     const builder = getBuilder()
     const result = builder.extractOrderBy(parent, { name: { direction: 'desc', priority: 1 } })
     expect(result).toHaveLength(1)
+    expect(sqlDesc(result[0])).toBe('[param] desc')
   })
 
   test('priority sorting (higher priority first)', () => {
@@ -1212,6 +1245,9 @@ describe('extractOrderBy', () => {
       name: { direction: 'desc', priority: 10 },
     })
     expect(result).toHaveLength(2)
+    // Higher priority (10) should come first → name desc, then id asc
+    expect(sqlDesc(result[0])).toBe('[param] desc')
+    expect(sqlDesc(result[1])).toBe('[param] asc')
   })
 
   test('null config values skipped', () => {
@@ -1221,6 +1257,7 @@ describe('extractOrderBy', () => {
       id: { direction: 'asc', priority: 1 },
     })
     expect(result).toHaveLength(1)
+    expect(sqlDesc(result[0])).toBe('[param] asc')
   })
 
   test('unknown column names skipped', () => {
@@ -1270,7 +1307,8 @@ describe('extractColumns', () => {
       children: { name: 'children', fieldsByTypeName: {} },
     }
     const result = builder.extractColumns(tree, parent)
-    // Should have exactly one key (the first column)
-    expect(Object.keys(result)).toHaveLength(1)
+    // Should have exactly one key — the first column (id)
+    expect(Object.keys(result)).toEqual(['id'])
+    expect(result.id).toBe(true)
   })
 })
