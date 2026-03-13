@@ -5,7 +5,10 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "paths": {
+      "@drizzle-graphql-suite/schema": ["../schema/dist/index.d.ts"]
+    }
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]

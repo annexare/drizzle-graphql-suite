@@ -120,31 +120,91 @@ export type RelationPruneRule = false | 'leaf' | { only: string[] }
 
 // ─── Build Schema Config ─────────────────────────────────────
 
+/**
+ * Configuration for both the GraphQL schema builder (server) and the
+ * type-safe client. Shared across `drizzle-graphql-suite/schema` and
+ * `drizzle-graphql-suite/client` so a single config object drives both
+ * the runtime schema and the inferred TypeScript types.
+ *
+ * @example
+ * ```ts
+ * const config = {
+ *   mutations: true,
+ *   limitRelationDepth: 5,
+ *   limitSelfRelationDepth: 2,
+ *   suffixes: { list: 's', single: '' },
+ *   tables: { exclude: ['session', 'account'] },
+ *   pruneRelations: {
+ *     'asset.childAssets': false,
+ *     'override.asset': 'leaf',
+ *     'attribute.asset': { only: ['selectedVariant'] },
+ *   },
+ * } as const satisfies BuildSchemaConfig
+ * ```
+ */
 export type BuildSchemaConfig = {
   /**
-   * Set to `false` to omit mutations from the schema.
+   * Whether to generate GraphQL mutation operations (insert, update, delete).
+   * Set to `false` for a read-only schema.
+   * On the client side, controls whether mutation helpers are generated.
    * @default true
    */
   mutations?: boolean
   /**
-   * Limits depth of generated relation fields on queries.
-   * Non-negative integer or undefined (no limit).
-   * Set to 0 to omit relations altogether.
-   * @default 3
+   * Maximum depth for expanding relation fields in the generated schema
+   * and in client-side filter types (`InferEntityFilters`).
+   *
+   * - **Server**: limits how many levels of nested relations appear in
+   *   GraphQL object types. `undefined` means no limit.
+   * - **Client**: limits recursive relation filter type expansion to
+   *   prevent TS7056 on circular schemas. Capped at 5.
+   *
+   * Set to `0` to omit relations altogether.
+   *
+   * @example
+   * ```ts
+   * // Allow up to 5 levels of nesting
+   * { limitRelationDepth: 5 }
+   * ```
+   * @default 3 (server) / 1 (client filter types)
    */
   limitRelationDepth?: number
   /**
-   * Max occurrences of the same table via direct self-relations in a type path.
-   * - 1 = self-relation fields are omitted entirely (default)
-   * - 2 = one level of self-relation expansion (e.g., item.parent exists but
-   *   the nested item has no parent/children fields)
-   * Only applies to direct self-relations (source table === target table).
-   * Cross-table paths that revisit a table are governed by limitRelationDepth.
+   * Max occurrences of the same table via direct self-relations in a
+   * single type path. Only applies to relations where source and target
+   * table are identical (e.g., `asset.parent → asset`).
+   *
+   * - `1` = self-relation fields are omitted entirely
+   * - `2` = one level of self-relation expansion (the nested type has
+   *   no further self-relation fields)
+   *
+   * Cross-table cycles that revisit a table are governed by
+   * `limitRelationDepth` instead.
+   *
+   * @example
+   * ```ts
+   * // category.parent → category (expanded), but nested category
+   * // won't have parent/children fields
+   * { limitSelfRelationDepth: 2 }
+   * ```
    * @default 1
    */
   limitSelfRelationDepth?: number
   /**
-   * Customizes query name suffixes.
+   * Customizes the suffixes appended to auto-generated query names.
+   *
+   * Given a table named `asset`:
+   * - List query: `asset` + `list` suffix → e.g. `"assets"` or `"assetList"`
+   * - Single query: `asset` + `single` suffix → e.g. `"asset"` or `"assetSingle"`
+   *
+   * @example
+   * ```ts
+   * // "assets" / "asset" (pluralize list, no suffix for single)
+   * { suffixes: { list: 's', single: '' } }
+   *
+   * // "assetList" / "assetSingle" (explicit suffixes)
+   * { suffixes: { list: 'List', single: 'Single' } }
+   * ```
    * @default { list: '', single: 'Single' }
    */
   suffixes?: {
@@ -152,29 +212,87 @@ export type BuildSchemaConfig = {
     single?: string
   }
   /**
-   * Per-table hooks for queries and mutations.
-   * Keys are table names as they appear in the Drizzle schema.
+   * Per-table lifecycle hooks for queries and mutations.
+   * Keys are table names as they appear in the Drizzle schema object.
+   *
+   * Hooks run server-side only and are not included in the shared config
+   * object — define them separately when building the schema.
+   *
+   * @example
+   * ```ts
+   * {
+   *   hooks: {
+   *     asset: {
+   *       query: { before: (ctx) => { ... } },
+   *       insert: { after: (ctx, result) => { ... } },
+   *     },
+   *   },
+   * }
+   * ```
    */
   hooks?: HooksConfig
   /**
-   * Per-table configuration: exclude tables or limit operations.
+   * Per-table configuration: exclude tables entirely or limit which
+   * operations are generated per table.
+   *
    * Table names must match the keys in the Drizzle schema object.
+   *
+   * @example
+   * ```ts
+   * {
+   *   tables: {
+   *     // Remove auth tables from the GraphQL schema
+   *     exclude: ['session', 'account', 'verification'],
+   *     // Make 'auditLog' read-only
+   *     config: { auditLog: { queries: true, mutations: false } },
+   *   },
+   * }
+   * ```
    */
   tables?: {
     /** Tables to completely exclude (no types, no operations, relations to them skipped). */
-    exclude?: string[]
+    exclude?: readonly string[]
     /** Per-table operation overrides. Tables not listed get default behavior. */
     config?: Record<string, TableOperations>
   }
   /**
-   * Fine-grained per-relation pruning rules.
-   * Keys are `tableName.relationName` (e.g., `'asset.childAssets': false`).
+   * Fine-grained per-relation pruning rules that control how each
+   * relation expands in the generated schema.
+   *
+   * Keys use `tableName.relationName` format. Values:
+   * - `false` — relation field is omitted entirely from the parent type
+   * - `'leaf'` — relation expands with scalar columns only (no nested relations)
+   * - `{ only: string[] }` — relation expands with only the listed child relations
+   *
+   * @example
+   * ```ts
+   * {
+   *   pruneRelations: {
+   *     // Remove back-reference completely
+   *     'assetType.assets': false,
+   *     // Show override.asset but don't expand its relations
+   *     'override.asset': 'leaf',
+   *     // Only keep selectedVariant on attribute.asset
+   *     'attribute.asset': { only: ['selectedVariant'] },
+   *   },
+   * }
+   * ```
    */
   pruneRelations?: Record<string, RelationPruneRule>
   /**
-   * Enable debug logging for schema diagnostics.
-   * - `true`: logs SDL byte size and type count
-   * - `{ schemaSize?: boolean; relationTree?: boolean }`: selective logging
+   * Enable debug logging for schema diagnostics (server-side only).
+   *
+   * - `true` — logs SDL byte size and type count
+   * - `{ schemaSize?: boolean; relationTree?: boolean }` — selective logging
+   *
+   * @example
+   * ```ts
+   * // Log everything
+   * { debug: true }
+   *
+   * // Only log the relation expansion tree
+   * { debug: { relationTree: true } }
+   * ```
    */
   debug?: boolean | { schemaSize?: boolean; relationTree?: boolean }
 }
