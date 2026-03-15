@@ -3,7 +3,12 @@ import { join, resolve } from 'node:path'
 
 const rootDir = resolve(import.meta.dirname, '..')
 const packagesDir = join(rootDir, 'packages')
+const distDir = join(rootDir, 'dist')
 const GITHUB_PACKAGES = 'https://github.com/annexare/drizzle-graphql-suite/tree/main/packages'
+const ALIAS_REPOSITORY = {
+  type: 'git',
+  url: 'https://github.com/annexare/drizzle-graphql-suite.git',
+}
 
 const FIELDS_TO_COPY = [
   'name',
@@ -17,11 +22,13 @@ const FIELDS_TO_COPY = [
   'type',
 ] as const
 
+const ALIAS_PACKAGES = ['schema', 'client', 'query'] as const
+
 async function preparePackage(packageDir: string) {
   const srcPkg = await Bun.file(join(packageDir, 'package.json')).json()
-  const distDir = join(packageDir, 'dist')
+  const pkgDistDir = join(packageDir, 'dist')
 
-  await mkdir(distDir, { recursive: true })
+  await mkdir(pkgDistDir, { recursive: true })
 
   // biome-ignore lint/suspicious/noExplicitAny: building dynamic object
   const publishPkg: Record<string, any> = {}
@@ -50,29 +57,27 @@ async function preparePackage(packageDir: string) {
     publishPkg.peerDependencies = srcPkg.peerDependencies
   }
 
-  await Bun.write(join(distDir, 'package.json'), `${JSON.stringify(publishPkg, null, 2)}\n`)
+  await Bun.write(join(pkgDistDir, 'package.json'), `${JSON.stringify(publishPkg, null, 2)}\n`)
 
   // Copy README with relative links rewritten to absolute GitHub URLs
   const readmeFile = Bun.file(join(packageDir, 'README.md'))
   if (await readmeFile.exists()) {
     let readme = await readmeFile.text()
     readme = readme.replace(/\.\.\/(schema|client|query)\/README\.md/g, `${GITHUB_PACKAGES}/$1`)
-    await Bun.write(join(distDir, 'README.md'), readme)
+    await Bun.write(join(pkgDistDir, 'README.md'), readme)
   }
 
   // Copy root LICENSE
   const licenseFile = Bun.file(join(rootDir, 'LICENSE'))
   if (await licenseFile.exists()) {
-    await Bun.write(join(distDir, 'LICENSE'), licenseFile)
+    await Bun.write(join(pkgDistDir, 'LICENSE'), licenseFile)
   }
 
   console.log(`Prepared ${srcPkg.name} for publishing`)
 }
 
-const WRAPPER_PACKAGES = ['schema', 'client', 'query'] as const
-
 async function prepareRootPackage() {
-  const writes = WRAPPER_PACKAGES.flatMap((name) => {
+  const writes = ALIAS_PACKAGES.flatMap((name) => {
     const content = `export * from '@drizzle-graphql-suite/${name}'\n`
     return [
       Bun.write(join(rootDir, `${name}.js`), content),
@@ -84,11 +89,143 @@ async function prepareRootPackage() {
   console.log('Root wrapper files generated')
 }
 
+// ─── Alias packages (@graphql-suite/*) ──────────────────────
+
+async function copyLicenseAndReadme(targetDir: string) {
+  const licenseFile = Bun.file(join(rootDir, 'LICENSE'))
+  const readmeFile = Bun.file(join(rootDir, 'README.md'))
+  const writes: Promise<number>[] = []
+
+  if (await licenseFile.exists()) {
+    writes.push(Bun.write(join(targetDir, 'LICENSE'), licenseFile))
+  }
+  if (await readmeFile.exists()) {
+    writes.push(Bun.write(join(targetDir, 'README.md'), readmeFile))
+  }
+
+  await Promise.all(writes)
+}
+
+async function prepareScopedAlias(name: string) {
+  const srcPkg = await Bun.file(join(packagesDir, name, 'package.json')).json()
+  const aliasDir = join(distDir, '@graphql-suite', name)
+
+  await mkdir(aliasDir, { recursive: true })
+
+  const reexport = `export * from '@drizzle-graphql-suite/${name}'\n`
+  // biome-ignore lint/suspicious/noExplicitAny: building dynamic object
+  const pkg: Record<string, any> = {
+    name: `@graphql-suite/${name}`,
+    version: srcPkg.version,
+    description: srcPkg.description,
+    license: srcPkg.license,
+    author: srcPkg.author,
+    repository: ALIAS_REPOSITORY,
+    type: 'module',
+    publishConfig: { access: 'public' },
+    main: './index.js',
+    types: './index.d.ts',
+    exports: {
+      '.': {
+        types: './index.d.ts',
+        import: './index.js',
+      },
+    },
+    dependencies: {
+      [`@drizzle-graphql-suite/${name}`]: srcPkg.version,
+    },
+  }
+
+  if (srcPkg.peerDependencies) {
+    pkg.peerDependencies = srcPkg.peerDependencies
+  }
+
+  await Promise.all([
+    Bun.write(join(aliasDir, 'index.js'), reexport),
+    Bun.write(join(aliasDir, 'index.d.ts'), reexport),
+    Bun.write(join(aliasDir, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`),
+    copyLicenseAndReadme(aliasDir),
+  ])
+
+  console.log(`Prepared @graphql-suite/${name} alias`)
+}
+
+async function prepareUmbrellaPackage() {
+  const rootPkg = await Bun.file(join(rootDir, 'package.json')).json()
+  const umbrellaDir = join(distDir, 'graphql-suite')
+
+  await mkdir(umbrellaDir, { recursive: true })
+
+  // Generate wrapper files that re-export from @graphql-suite/*
+  const wrapperWrites = ALIAS_PACKAGES.flatMap((name) => {
+    const content = `export * from '@graphql-suite/${name}'\n`
+    return [
+      Bun.write(join(umbrellaDir, `${name}.js`), content),
+      Bun.write(join(umbrellaDir, `${name}.d.ts`), content),
+    ]
+  })
+
+  // biome-ignore lint/suspicious/noExplicitAny: building dynamic object
+  const dependencies: Record<string, any> = {}
+  for (const name of ALIAS_PACKAGES) {
+    dependencies[`@graphql-suite/${name}`] = rootPkg.version
+  }
+
+  const pkg = {
+    name: 'graphql-suite',
+    version: rootPkg.version,
+    description: rootPkg.description,
+    license: rootPkg.license,
+    author: rootPkg.author,
+    repository: ALIAS_REPOSITORY,
+    type: 'module',
+    publishConfig: { access: 'public' },
+    files: [
+      'schema.js',
+      'schema.d.ts',
+      'client.js',
+      'client.d.ts',
+      'query.js',
+      'query.d.ts',
+      'LICENSE',
+      'README.md',
+    ],
+    exports: {
+      './schema': {
+        types: './schema.d.ts',
+        import: './schema.js',
+      },
+      './client': {
+        types: './client.d.ts',
+        import: './client.js',
+      },
+      './query': {
+        types: './query.d.ts',
+        import: './query.js',
+      },
+    },
+    dependencies,
+  }
+
+  await Promise.all([
+    ...wrapperWrites,
+    Bun.write(join(umbrellaDir, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`),
+    copyLicenseAndReadme(umbrellaDir),
+  ])
+
+  console.log('Prepared graphql-suite umbrella package')
+}
+
 async function main() {
   const entries = await readdir(packagesDir, { withFileTypes: true })
   const packageDirs = entries.filter((e) => e.isDirectory()).map((e) => join(packagesDir, e.name))
 
-  await Promise.all([...packageDirs.map(preparePackage), prepareRootPackage()])
+  await Promise.all([
+    ...packageDirs.map(preparePackage),
+    prepareRootPackage(),
+    ...ALIAS_PACKAGES.map(prepareScopedAlias),
+    prepareUmbrellaPackage(),
+  ])
   console.log('All packages prepared for publishing')
 }
 

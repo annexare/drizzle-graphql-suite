@@ -59,7 +59,8 @@
     "graphql": "16.13.1"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "build": "bun run --filter '@drizzle-graphql-suite/schema' build && bun run --filter '@drizzle-graphql-suite/client' build && bun run --filter '@drizzle-graphql-suite/query' build",
@@ -71,7 +72,9 @@
     "ci": "bun run check-types && bun run lint:check && bun run test",
     "version": "bun run scripts/version-bump.ts",
     "prepare-publish": "bun run scripts/prepare-publish.ts",
-    "release": "bun run build && bun run prepare-publish"
+    "release": "bun run build && bun run prepare-publish",
+    "publish-all": "npm publish && npm publish dist/@graphql-suite/schema && npm publish dist/@graphql-suite/client && npm publish dist/@graphql-suite/query && npm publish dist/graphql-suite",
+    "publish-new": "npm publish dist/@graphql-suite/schema && npm publish dist/@graphql-suite/client && npm publish dist/@graphql-suite/query && npm publish dist/graphql-suite"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.7",
