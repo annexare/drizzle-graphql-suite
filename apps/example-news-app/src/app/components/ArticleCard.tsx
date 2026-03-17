@@ -30,16 +30,23 @@ export function ArticleCard({
 
   if (onSelect) {
     return (
-      <li
-        style={{
-          padding: '12px 0',
-          borderBottom: '1px solid #eee',
-          cursor: 'pointer',
-        }}
-        onClick={() => onSelect(id)}
-        onKeyDown={(e) => e.key === 'Enter' && onSelect(id)}
-      >
-        {content}
+      <li style={{ padding: '12px 0', borderBottom: '1px solid #eee' }}>
+        <button
+          type="button"
+          style={{
+            cursor: 'pointer',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            textAlign: 'inherit',
+            font: 'inherit',
+            color: 'inherit',
+            width: '100%',
+          }}
+          onClick={() => onSelect(id)}
+        >
+          {content}
+        </button>
       </li>
     )
   }

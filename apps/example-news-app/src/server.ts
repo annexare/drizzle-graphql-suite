@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { buildSchema } from '@graphql-suite/schema'
 import { drizzle } from 'drizzle-orm/bun-sql'
 import { createYoga } from 'graphql-yoga'
@@ -33,7 +33,9 @@ const distDir = join(import.meta.dir, 'app', 'dist')
 
 function serveStatic(path: string): Response | null {
   try {
-    const filePath = join(distDir, path)
+    const sanitized = path.replace(/^\/+/, '')
+    const filePath = resolve(distDir, sanitized)
+    if (!filePath.startsWith(distDir)) return null
     const file = Bun.file(filePath)
     return new Response(file)
   } catch {
