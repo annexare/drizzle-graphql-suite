@@ -52,36 +52,33 @@ Returns the `GeneratedEntities` object (queries, mutations, inputs, types) witho
 
 ```ts
 function generateSDL(
-  drizzleSchema: Record<string, unknown>,
-  config?: BuildSchemaConfig,
+  schema: GraphQLSchema,
 ): string
 ```
 
-Generates the GraphQL SDL string from a Drizzle schema. Codegen utility.
+Generates the GraphQL SDL string from a `GraphQLSchema` (as produced by `buildSchema` or `buildSchemaFromDrizzle`). Codegen utility.
 
 ### generateTypes
 
 ```ts
 function generateTypes(
-  drizzleSchema: Record<string, unknown>,
-  config?: BuildSchemaConfig,
+  schema: GraphQLSchema,
   options?: CodegenOptions,
 ): string
 ```
 
-Generates TypeScript type definitions from a Drizzle schema. Codegen utility.
+Generates TypeScript type definitions from a `GraphQLSchema`. Codegen utility.
 
 ### generateEntityDefs
 
 ```ts
 function generateEntityDefs(
-  drizzleSchema: Record<string, unknown>,
-  config?: BuildSchemaConfig,
+  schema: GraphQLSchema,
   options?: CodegenOptions,
 ): string
 ```
 
-Generates entity definition types for use with `@graphql-suite/client`. Codegen utility.
+Generates entity definition types for use with `@graphql-suite/client` from a `GraphQLSchema`. Codegen utility.
 
 ### permissive
 

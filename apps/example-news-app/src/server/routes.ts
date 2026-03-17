@@ -59,13 +59,21 @@ const ARTICLE_QUERY = `query($where: ArticleFilters) {
 
 // ─── Helpers ────────────────────────────────────────────────
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 function htmlShell(bodyHtml: string, title: string): Response {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
+  <title>${escapeHtml(title)}</title>
 </head>
 <body>${bodyHtml}</body>
 </html>`
@@ -88,8 +96,19 @@ async function executeGraphQL(
       body: JSON.stringify({ query, variables }),
     }),
   )
+
+  if (!res.ok) {
+    throw new Error(`GraphQL request failed with status ${res.status}`)
+  }
+
   // biome-ignore lint/suspicious/noExplicitAny: GraphQL response shape
   const json = (await res.json()) as any
+
+  if (json.errors?.length) {
+    const messages = json.errors.map((e: { message: string }) => e.message).join('; ')
+    throw new Error(`GraphQL errors: ${messages}`)
+  }
+
   return json.data ?? {}
 }
 

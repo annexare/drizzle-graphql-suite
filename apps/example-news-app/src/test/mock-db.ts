@@ -242,8 +242,41 @@ export function createSeededMockDb() {
           }
           return Promise.resolve(rows)
         },
-        findFirst: (opts?: { with?: Record<string, unknown> }) => {
-          const row = (seedDataMap[name] ?? [])[0] ?? null
+        findFirst: (opts?: {
+          // biome-ignore lint/suspicious/noExplicitAny: Drizzle SQL where clause
+          where?: any
+          with?: Record<string, unknown>
+        }) => {
+          const rows = seedDataMap[name] ?? []
+          let row: Record<string, unknown> | null = rows[0] ?? null
+
+          // Try to honor Drizzle SQL equality filters by inspecting the SQL object.
+          // The schema builder passes `eq(table.column, value)` SQL expressions.
+          if (opts?.where && rows.length > 0) {
+            const sql = opts.where
+            // Drizzle eq() produces a BinaryOperator with queryChunks containing
+            // [Column, StringChunk(' = '), Param(value)]
+            const chunks = sql?.queryChunks ?? sql?.chunks
+            if (Array.isArray(chunks)) {
+              const colChunk = chunks.find(
+                (c: Record<string, unknown>) => c?.constructor?.name === 'Column',
+              )
+              const paramChunk = chunks.find(
+                (c: Record<string, unknown>) => c?.constructor?.name === 'Param',
+              )
+              if (colChunk && paramChunk) {
+                const colName = (colChunk as { name?: string }).name
+                const paramValue = (paramChunk as { value?: unknown }).value
+                if (colName && paramValue !== undefined) {
+                  const match = rows.find(
+                    (r) => (r as Record<string, unknown>)[colName] === paramValue,
+                  )
+                  row = match ?? null
+                }
+              }
+            }
+          }
+
           if (row && opts?.with) {
             return Promise.resolve(resolveWith(name, row as Record<string, unknown>, opts.with))
           }
