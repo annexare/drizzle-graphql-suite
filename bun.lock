@@ -5,9 +5,9 @@
     "": {
       "name": "drizzle-graphql-suite",
       "dependencies": {
-        "@drizzle-graphql-suite/client": "0.8.3-rc.0",
-        "@drizzle-graphql-suite/query": "0.8.3-rc.0",
-        "@drizzle-graphql-suite/schema": "0.8.3-rc.0",
+        "@drizzle-graphql-suite/client": "0.8.3",
+        "@drizzle-graphql-suite/query": "0.8.3",
+        "@drizzle-graphql-suite/schema": "0.8.3",
         "graphql": "16.13.1",
       },
       "devDependencies": {
@@ -18,7 +18,7 @@
     },
     "packages/client": {
       "name": "@drizzle-graphql-suite/client",
-      "version": "0.8.3-rc.0",
+      "version": "0.8.3",
       "devDependencies": {
         "@types/bun": "1.3.10",
         "drizzle-orm": "0.45.1",
@@ -31,9 +31,9 @@
     },
     "packages/query": {
       "name": "@drizzle-graphql-suite/query",
-      "version": "0.8.3-rc.0",
+      "version": "0.8.3",
       "devDependencies": {
-        "@tanstack/react-query": "5.90.21",
+        "@tanstack/react-query": "5.95.0",
         "@types/bun": "1.3.10",
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
@@ -50,7 +50,7 @@
     },
     "packages/schema": {
       "name": "@drizzle-graphql-suite/schema",
-      "version": "0.8.3-rc.0",
+      "version": "0.8.3",
       "dependencies": {
         "graphql-parse-resolve-info": "4.14.1",
       },
@@ -91,9 +91,9 @@
 
     "@drizzle-graphql-suite/schema": ["@drizzle-graphql-suite/schema@workspace:packages/schema"],
 
-    "@tanstack/query-core": ["@tanstack/query-core@5.90.20", "", {}, "sha512-OMD2HLpNouXEfZJWcKeVKUgQ5n+n3A2JFmBaScpNDUqSrQSjiveC7dKMe53uJUg1nDG16ttFPz2xfilz6i2uVg=="],
+    "@tanstack/query-core": ["@tanstack/query-core@5.95.0", "", {}, "sha512-H1/CWCe8tGL3YIVeo770Z6kPbt0B3M1d/iQXIIK1qlFiFt6G2neYdkHgLapOC8uMYNt9DmHjmGukEKgdMk1P+A=="],
 
-    "@tanstack/react-query": ["@tanstack/react-query@5.90.21", "", { "dependencies": { "@tanstack/query-core": "5.90.20" }, "peerDependencies": { "react": "^18 || ^19" } }, "sha512-0Lu6y5t+tvlTJMTO7oh5NSpJfpg/5D41LlThfepTixPYkJ0sE2Jj0m0f6yYqujBwIXlId87e234+MxG3D3g7kg=="],
+    "@tanstack/react-query": ["@tanstack/react-query@5.95.0", "", { "dependencies": { "@tanstack/query-core": "5.95.0" }, "peerDependencies": { "react": "^18 || ^19" } }, "sha512-EMP8B+BK9zvnAemT8M/y3z/WO0NjZ7fIUY3T3wnHYK6AA3qK/k33i7tPgCXCejhX0cd4I6bJIXN2GmjrHjDBzg=="],
 
     "@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
 
