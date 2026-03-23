@@ -17,6 +17,13 @@ import type {
 
 // ─── Helper: resolve entity def from ref + name ──────────────
 
+// TODO: ResolveEntity through EntityDefsRef prevents conditional types like
+// `extends { orderBy: infer O }` from resolving, making orderBy/where/filters
+// accept any shape at the type level. The opaque wrapper is needed to avoid
+// TS7056 (serialization depth limit), but we need to find a way to preserve
+// type safety for these params — possibly by pre-computing and storing the
+// resolved param types in EntityDef rather than using conditional inference.
+
 type ResolveEntity<
   TRef extends EntityDefsRef<AnyEntityDefs>,
   TEntityName extends string,
