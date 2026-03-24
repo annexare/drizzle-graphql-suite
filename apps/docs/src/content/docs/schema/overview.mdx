@@ -5,6 +5,8 @@ description: How @graphql-suite/schema generates a complete GraphQL schema from 
 
 `@graphql-suite/schema` takes a Drizzle `PgDatabase` instance and produces a complete GraphQL schema at runtime. There is no code generation step — your Drizzle table definitions are the single source of truth.
 
+Inspired by [`drizzle-graphql`](https://github.com/drizzle-team/drizzle-graphql), this package is a purpose-built replacement focused on PostgreSQL with deeper relation support, configurable hooks, permission layers, and row-level security.
+
 ## What gets generated
 
 **Queries** are created for every included table:
