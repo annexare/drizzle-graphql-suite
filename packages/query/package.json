@@ -31,7 +31,7 @@
     "test": "bun test"
   },
   "peerDependencies": {
-    "@graphql-suite/client": ">=0.7.0",
+    "@graphql-suite/client": ">=0.9.0",
     "@tanstack/react-query": ">=5.0.0",
     "react": ">=18.0.0"
   },
