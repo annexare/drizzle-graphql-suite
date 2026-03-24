@@ -197,6 +197,51 @@ const deleted = await entity.delete({
 // Returns: InferResult<...>[]
 ```
 
+## Filter Operators
+
+### Scalar filters
+
+Per-column operators: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `like`, `notLike`, `ilike`, `notIlike`, `inArray`, `notInArray`, `isNull`, `isNotNull`.
+
+Combine with `OR` for disjunctions:
+
+```ts
+where: {
+  status: { eq: 'published' },
+  OR: [
+    { authorId: { eq: 'user-1' } },
+    { authorId: { eq: 'user-2' } },
+  ],
+}
+```
+
+### Relation filters
+
+One-to-many relations support quantifiers:
+
+| Quantifier | Matches when |
+|-----------|-------------|
+| `some` | At least one related row matches |
+| `every` | All related rows match |
+| `none` | No related rows match |
+
+```ts
+where: {
+  comments: {
+    some: { approved: { eq: true } },
+    none: { spam: { eq: true } },
+  },
+}
+```
+
+One-to-one / many-to-one relations use `some`:
+
+```ts
+where: {
+  author: { some: { role: { eq: 'admin' } } },
+}
+```
+
 ## Dynamic URL and Headers
 
 Both URL and headers support static values and functions:

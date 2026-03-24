@@ -106,6 +106,48 @@ const articles = await client.entity('article').query({
 
 Available operators: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `like`, `notLike`, `ilike`, `notIlike`, `inArray`, `notInArray`, `isNull`, `isNotNull`.
 
+### Relation filters
+
+For **one-to-many** relations, you can filter using quantifiers:
+
+| Quantifier | Matches when |
+|-----------|-------------|
+| `some` | At least one related row matches |
+| `every` | All related rows match |
+| `none` | No related rows match |
+
+```ts
+const articles = await client.entity('article').query({
+  select: { id: true, title: true },
+  where: {
+    comments: {
+      some: { approved: { eq: true } },  // has at least one approved comment
+    },
+  },
+})
+```
+
+You can combine multiple quantifiers on the same relation:
+
+```ts
+where: {
+  comments: {
+    some: { body: { ilike: '%bug%' } },   // at least one comment mentions "bug"
+    none: { spam: { eq: true } },          // no comments flagged as spam
+  },
+}
+```
+
+**One-to-one / many-to-one** relations use `some` as the quantifier, applied implicitly — just pass the filter object directly:
+
+```ts
+where: {
+  author: {
+    some: { role: { eq: 'admin' } },
+  },
+}
+```
+
 ## The `orderBy` parameter
 
 Ordering uses column names with direction and priority:

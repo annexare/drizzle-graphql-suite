@@ -174,3 +174,31 @@ Use ASCII box-style section headers to organize long files:
 - Use exact versions for `bun install` (configured in `bunfig.toml`: `exact = true`)
 - Peer dependencies specify minimum versions with `>=` (e.g., `"drizzle-orm": ">=0.44.0"`)
 - Packages are published to npm; the root re-exports all three via subpath exports
+
+## Documentation
+
+Any change to public API, default values, config options, or behavior **must** be reflected across all four surfaces:
+
+1. **Tests** (`packages/*/src/*.test.ts`) — feature coverage and regression prevention
+2. **Docs site** (`apps/docs/src/content/docs/`) — user-facing Astro/Starlight docs
+3. **Skills** (`skills/graphql-suite/`) — AI agent reference (SKILL.md, references/, examples/, patterns/)
+4. **READMEs** (`packages/*/README.md`, root `README.md`) — npm package pages
+
+Key files to update per area:
+
+| Area | Tests | Docs page | Skill file |
+|------|-------|-----------|------------|
+| Schema config | `schema-builder.test.ts` | `schema/config.mdx` | `references/configuration.md` |
+| Schema API | `schema-builder.test.ts` | `reference/schema-api.mdx` | `references/schema-api.md` |
+| Client operations | `entity.test.ts` | `client/entity-client.mdx` | `references/client-api.md` |
+| Client API | `client.test.ts` | `reference/client-api.mdx` | `references/client-api.md` |
+| Query hooks | `useEntity*.test.tsx` | `query/queries.mdx`, `query/mutations.mdx` | `references/query-api.md` |
+| Permissions | `permissions.test.ts` | `schema/permissions.mdx` | `references/permissions.md` |
+| Hooks | `row-security.test.ts` | `schema/hooks.mdx` | `patterns/hooks-patterns.md` |
+| Codegen | `codegen.test.ts` | `schema/codegen.mdx` | `references/codegen.md` |
+| Type inference | `infer.test.ts` | `client/type-inference.mdx` | `references/client-api.md` |
+
+Verify after changes:
+- `bun run test` — all tests pass
+- `bun run check-types` — no type errors
+- `cd apps/docs && bun run build` — docs build
