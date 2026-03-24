@@ -16,6 +16,7 @@ const result = await Bun.build({
   minify: true,
   external: externals,
   banner,
+  define: { 'process.env.NODE_ENV': JSON.stringify('production') },
 })
 
 if (!result.success) {

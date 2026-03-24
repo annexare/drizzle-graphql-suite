@@ -1,6 +1,6 @@
 {
   "name": "@graphql-suite/query",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "description": "React Query hooks for the Drizzle GraphQL client with caching and automatic invalidation",
   "license": "MIT",
